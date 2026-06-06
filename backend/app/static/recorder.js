@@ -121,7 +121,10 @@ async function startRecording() {
   }
   const chunks = []; // scoped per session — a stray recorder can never pollute another take
   const mime = pickMime();
-  mediaRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+  mediaRecorder = new MediaRecorder(stream, {
+    ...(mime ? { mimeType: mime } : {}),
+    audioBitsPerSecond: 128000, // default ~48kbps opus smears consonants
+  });
   mediaRecorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
   mediaRecorder.onstop = () => {
     // stream stays warm for the next take (released on pagehide)

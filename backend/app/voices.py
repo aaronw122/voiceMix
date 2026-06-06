@@ -28,6 +28,18 @@ VOICES = [
 
 _PUBLIC_FIELDS = ("id", "name", "engine", "acceptsText")
 
+# STS rendering defaults: higher stability = less phoneme drift/warble; high
+# similarity_boost = closer to the target timbre. Per-voice overrides go in a
+# "voiceSettings" key on the catalog entry (tune via the Tier-3 eval harness).
+DEFAULT_VOICE_SETTINGS = {"stability": 0.65, "similarity_boost": 0.8, "style": 0.0}
+
+
+def voice_settings_for(eleven_voice_id: str) -> dict:
+    for v in VOICES:
+        if v.get("elevenVoiceId") == eleven_voice_id:
+            return {**DEFAULT_VOICE_SETTINGS, **v.get("voiceSettings", {})}
+    return dict(DEFAULT_VOICE_SETTINGS)
+
 
 def list_voices() -> list[dict]:
     return [{k: v[k] for k in _PUBLIC_FIELDS} for v in VOICES]

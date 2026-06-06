@@ -5,12 +5,21 @@ import pytest
 
 
 def make_wav(seconds: float = 0.5, rate: int = 8000) -> bytes:
+    # a tone, not silence — the normalize chain trims silence, so silent
+    # fixtures would be trimmed to nothing
+    import math
+    import struct
+
     buf = io.BytesIO()
     with wave.open(buf, "wb") as w:
         w.setnchannels(1)
         w.setsampwidth(2)
         w.setframerate(rate)
-        w.writeframes(b"\x00\x00" * int(rate * seconds))
+        n = int(rate * seconds)
+        frames = b"".join(
+            struct.pack("<h", int(12000 * math.sin(2 * math.pi * 220 * i / rate))) for i in range(n)
+        )
+        w.writeframes(frames)
     return buf.getvalue()
 
 
