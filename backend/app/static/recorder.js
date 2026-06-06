@@ -20,6 +20,7 @@ let take = null; // {blob, ext} — the current recording
 let takeGen = 0; // bumped per take; stale conversion results check it before landing
 let results = {}; // voiceId -> {url, audioUrl, blob} (cache per take)
 let failures = {}; // voiceId -> error message (tap to retry)
+let inflight = {}; // voiceId -> true while a conversion is running
 let wanted = null; // voiceId the user tapped while it was still converting
 let current = null; // result currently in the player
 let timerId = null;
@@ -147,10 +148,14 @@ async function startRecording() {
     takeGen++; // stale in-flight conversions from the previous take get ignored
     results = {};
     failures = {};
+    inflight = {};
     wanted = null;
-    statusEl.textContent = "pick a voice — converting all of them…";
+    statusEl.textContent = "pick a voice";
     voicesEl.classList.add("visible");
-    startAllConversions(); // parallel: every card becomes instant once its result lands
+    // ElevenLabs voices pre-convert in parallel (fast + cheap). Modal/celebrity
+    // voices convert on first tap — the Modal app is serial, so fanning out 5 at
+    // once just builds a long queue; warm containers make on-tap feel quick.
+    for (const v of voices) if (v.engine !== "modal") prefetch(v);
   };
   mediaRecorder.start();
   starting = false;
@@ -196,19 +201,17 @@ async function convertRequest(voice) {
   return { ...body, blob: audioBlob };
 }
 
-function startAllConversions() {
-  for (const v of voices) prefetch(v);
-}
-
 function prefetch(voice) {
   const gen = takeGen;
   const btn = voicesEl.querySelector(`[data-id="${voice.id}"]`);
   btn.classList.remove("ready", "failed");
   btn.classList.add("busy");
   delete failures[voice.id];
+  inflight[voice.id] = true;
   convertRequest(voice)
     .then((data) => {
       if (gen !== takeGen) return; // a newer take superseded this conversion
+      delete inflight[voice.id];
       results[voice.id] = data;
       btn.classList.remove("busy");
       btn.classList.add("ready");
@@ -216,6 +219,7 @@ function prefetch(voice) {
     })
     .catch((err) => {
       if (gen !== takeGen) return;
+      delete inflight[voice.id];
       failures[voice.id] = err.message;
       btn.classList.remove("busy");
       btn.classList.add("failed");
@@ -230,9 +234,9 @@ function prefetch(voice) {
 function convert(voice, btn) {
   if (!take) return;
   if (results[voice.id]) return showResult(voice.id, btn); // ready — instant
-  if (failures[voice.id]) return prefetch(voice); // tap a failed card = retry
-  wanted = voice.id; // still cooking — play it the moment it lands
+  wanted = voice.id; // play it the moment it lands
   statusEl.textContent = `cooking ${voice.name}…`;
+  if (!inflight[voice.id]) prefetch(voice); // modal voices (and failed retries) start here
 }
 
 function showResult(voiceId, btn) {
