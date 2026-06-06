@@ -13,6 +13,7 @@ def test_elevenlabs_engine_posts_sts_and_returns_mp3(monkeypatch):
     def handler(request: httpx.Request) -> httpx.Response:
         seen["url"] = str(request.url)
         seen["api_key"] = request.headers.get("xi-api-key")
+        seen["body"] = request.read()
         return httpx.Response(200, content=b"MP3_FROM_ELEVENLABS")
 
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
@@ -22,6 +23,8 @@ def test_elevenlabs_engine_posts_sts_and_returns_mp3(monkeypatch):
     assert out == b"MP3_FROM_ELEVENLABS"
     assert "speech-to-speech/pNInz6obpgDQGcFmaJgB" in seen["url"]
     assert seen["api_key"] == "test-key"
+    # pin the English STS model — multilingual drifted accent/language in testing
+    assert b"eleven_english_sts_v2" in seen["body"]
 
 
 def test_elevenlabs_engine_raises_on_api_error(monkeypatch):

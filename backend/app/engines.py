@@ -21,7 +21,9 @@ class VoiceEngine(Protocol):
 
 
 ELEVENLABS_STS_URL = "https://api.elevenlabs.io/v1/speech-to-speech/{voice_id}"
-ELEVENLABS_MODEL = "eleven_multilingual_sts_v2"
+# english_sts_v2 locks output to English — multilingual_sts_v2 auto-detects and
+# can drift accent/language on short or noisy clips (observed in testing)
+ELEVENLABS_MODEL = "eleven_english_sts_v2"
 
 
 class ElevenLabsEngine:
