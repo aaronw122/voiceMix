@@ -56,7 +56,9 @@ async function startRecording() {
   statusEl.textContent = "getting mic ready…"; // honest state: capture has NOT begun yet
   try {
     if (!stream || !stream.active) {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { noiseSuppression: true, echoCancellation: true, autoGainControl: true },
+      });
     }
   } catch {
     starting = false;

@@ -40,7 +40,9 @@ class ElevenLabsEngine:
             ELEVENLABS_STS_URL.format(voice_id=voice_id),
             headers={"xi-api-key": os.environ.get("ELEVENLABS_API_KEY", "")},
             files={"audio": ("input.wav", wav, "audio/wav")},
-            data={"model_id": ELEVENLABS_MODEL},
+            # remove_background_noise: STS needs clean single-speaker input — room noise
+            # renders as gibberish (verified via STT round-trip on real recordings)
+            data={"model_id": ELEVENLABS_MODEL, "remove_background_noise": "true"},
         )
         if resp.status_code != 200:
             # body stays server-side: EngineError messages flow into client-facing 502s
