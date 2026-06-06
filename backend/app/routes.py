@@ -49,6 +49,31 @@ async def voices():
     return list_voices()
 
 
+@router.post("/impersonate")
+async def impersonate(
+    request: Request,
+    voiceId: str = Form(...),
+    audio: UploadFile | None = File(None),
+    text: str | None = Form(None),
+):
+    voice = get_voice(voiceId)
+    if voice is None:
+        raise HTTPException(404, f"Unknown voice: {voiceId}")
+    if voice["engine"] != "modal":
+        raise HTTPException(422, f"Voice {voiceId} belongs on POST /convert")
+    if (audio is None) == (text is None):
+        raise HTTPException(422, "Send exactly one of: audio, text")
+
+    wav = await _read_and_normalize(audio) if audio is not None else None
+    engine = request.app.state.engines["modal"]
+    try:
+        mp3 = await engine.transform(wav, voice["id"], text)
+    except EngineError as e:
+        raise HTTPException(502, f"Voice engine failed: {e}")
+
+    return _persist(mp3, voice["name"])
+
+
 @router.post("/convert")
 async def convert(
     request: Request,
