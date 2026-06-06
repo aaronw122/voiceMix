@@ -12,7 +12,7 @@ const toastEl = document.getElementById("toast");
 
 let voices = [];
 let mediaRecorder = null;
-let chunks = [];
+let starting = false; // re-entry guard: taps during the getUserMedia gap must not spawn a 2nd recorder
 let take = null; // {blob, ext} — the current recording
 let results = {}; // voiceId -> {url, audioUrl, blob} (cache per take)
 let current = null; // result currently in the player
@@ -50,28 +50,37 @@ async function loadVoices() {
 }
 
 async function startRecording() {
+  if (starting) return; // a start is already in flight
+  starting = true;
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({ audio: true });
   } catch {
+    starting = false;
     statusEl.textContent = "voiceMix needs your mic — check the address-bar permission";
     return;
   }
-  chunks = [];
+  const chunks = []; // scoped per session — a stray recorder can never pollute another take
   const mime = pickMime();
   mediaRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
   mediaRecorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
   mediaRecorder.onstop = () => {
     stream.getTracks().forEach((t) => t.stop());
     const type = mediaRecorder.mimeType || "audio/webm";
-    take = { blob: new Blob(chunks, { type }), ext: type.includes("mp4") ? "m4a" : "webm" };
-    results = {}; // new take invalidates old conversions
     recordBtn.classList.remove("recording");
     recordBtn.textContent = "🎙️";
+    const blob = new Blob(chunks, { type });
+    if (blob.size === 0) {
+      statusEl.textContent = "that was too short — tap and speak for a second";
+      return;
+    }
+    take = { blob, ext: type.includes("mp4") ? "m4a" : "webm" };
+    results = {}; // new take invalidates old conversions
     statusEl.textContent = "pick a voice";
     voicesEl.classList.add("visible");
   };
   mediaRecorder.start();
+  starting = false;
   recordBtn.classList.add("recording");
   recordBtn.textContent = "⏹";
   resultEl.classList.remove("visible");
