@@ -43,13 +43,13 @@ jobs:
       # timeouts when pulling the base image.
       - name: Build and push (retried)
         run: |
-          build_and_push() {
+          build_and_push_backend() {
             docker build -t "$IMAGE:latest" -t "$IMAGE:sha-${{ github.sha }}" ./backend &&
             docker push "$IMAGE:latest" &&
             docker push "$IMAGE:sha-${{ github.sha }}"
           }
           for attempt in 1 2 3; do
-            if build_and_push; then echo "build+push succeeded (attempt $attempt)"; exit 0; fi
+            if build_and_push_backend; then echo "build+push succeeded (attempt $attempt)"; exit 0; fi
             echo "::warning::build+push attempt $attempt failed; retrying in 15s"
             sleep 15
           done
@@ -91,13 +91,13 @@ jobs:
             # Persist the tag into the box .env so a manual `docker compose up` after a
             # reboot uses this SHA instead of drifting back to :latest. Rollback = edit
             # this line. (.env is the box-local file; CI only ships .env.example.)
-            TAG="sha-${{ github.sha }}"
+            backend_image_tag="sha-${{ github.sha }}"
             if grep -q '^BACKEND_IMAGE_TAG=' .env 2>/dev/null; then
-              sed -i "s|^BACKEND_IMAGE_TAG=.*|BACKEND_IMAGE_TAG=${TAG}|" .env
+              sed -i "s|^BACKEND_IMAGE_TAG=.*|BACKEND_IMAGE_TAG=${backend_image_tag}|" .env
             else
-              echo "BACKEND_IMAGE_TAG=${TAG}" >> .env
+              echo "BACKEND_IMAGE_TAG=${backend_image_tag}" >> .env
             fi
-            export BACKEND_IMAGE_TAG="${TAG}"
+            export BACKEND_IMAGE_TAG="${backend_image_tag}"
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
             # Scope to backend only — never touch cloudflared (edge infra, brought up
             # once at bootstrap) or a future frontend container. --no-deps keeps this
@@ -105,12 +105,12 @@ jobs:
             docker compose pull backend
             docker compose up -d --no-deps backend
             # Post-deploy health gate: fail the deploy if the backend doesn't come up healthy.
-            ok=""
-            for i in $(seq 1 15); do
-              if curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1; then ok="yes"; break; fi
+            backend_ready=""
+            for attempt in $(seq 1 15); do
+              if curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1; then backend_ready="yes"; break; fi
               sleep 2
             done
-            if [ -z "$ok" ]; then
+            if [ -z "$backend_ready" ]; then
               echo "::error::backend /health did not pass after deploy"
               docker compose ps
               docker compose logs --tail=50 backend

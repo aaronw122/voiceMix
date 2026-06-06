@@ -43,7 +43,7 @@ jobs:
       # Hub timeouts when pulling base images. VITE_API_BASE_URL is inlined at build.
       - name: Build and push (retried)
         run: |
-          build_and_push() {
+          build_and_push_frontend() {
             docker build \
               --build-arg VITE_API_BASE_URL=https://voiceapi.awill.co \
               -t "$IMAGE:latest" -t "$IMAGE:sha-${{ github.sha }}" \
@@ -52,7 +52,7 @@ jobs:
             docker push "$IMAGE:sha-${{ github.sha }}"
           }
           for attempt in 1 2 3; do
-            if build_and_push; then echo "build+push succeeded (attempt $attempt)"; exit 0; fi
+            if build_and_push_frontend; then echo "build+push succeeded (attempt $attempt)"; exit 0; fi
             echo "::warning::build+push attempt $attempt failed; retrying in 15s"
             sleep 15
           done
@@ -92,19 +92,19 @@ jobs:
             # Persist the tag into the box .env so a manual `docker compose up` after a
             # reboot uses this SHA instead of drifting back to :latest. Rollback = edit
             # this line. (.env is the box-local file; CI only ships .env.example.)
-            TAG="sha-${{ github.sha }}"
+            frontend_image_tag="sha-${{ github.sha }}"
             if grep -q '^FRONTEND_IMAGE_TAG=' .env 2>/dev/null; then
-              sed -i "s|^FRONTEND_IMAGE_TAG=.*|FRONTEND_IMAGE_TAG=${TAG}|" .env
+              sed -i "s|^FRONTEND_IMAGE_TAG=.*|FRONTEND_IMAGE_TAG=${frontend_image_tag}|" .env
             else
-              echo "FRONTEND_IMAGE_TAG=${TAG}" >> .env
+              echo "FRONTEND_IMAGE_TAG=${frontend_image_tag}" >> .env
             fi
-            export FRONTEND_IMAGE_TAG="${TAG}"
+            export FRONTEND_IMAGE_TAG="${frontend_image_tag}"
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
             # Scope to frontend only — never touch backend or cloudflared.
             docker compose pull frontend
             docker compose up -d --no-deps frontend
             # Post-deploy health gate: fail the deploy if nginx isn't serving the SPA.
-            # Probe 127.0.0.1 (not localhost): wget/curl resolve localhost to ::1,
+            # Probe 127.0.0.1 (not localhost): curl may resolve localhost to ::1,
             # but nginx listens on IPv4 :80, so a localhost probe false-fails.
             frontend_ready=""
             for attempt in $(seq 1 15); do
