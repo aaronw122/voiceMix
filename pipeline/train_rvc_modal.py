@@ -261,13 +261,20 @@ INFER_GPU = os.environ.get("MODAL_INFER_GPU", "L4")  # inference is light; H100 
 
 @app.function(image=image, gpu=INFER_GPU, volumes={"/vol": vol}, timeout=600)
 def infer(model_name: str = DEFAULT_MODEL_NAME, source_name: str = "source.wav",
-          index_rate: float = 0.5, pitch: int = 0, f0_method: str = "rmvpe") -> dict:
+          index_rate: float = 0.5, pitch: int = 0, f0_method: str = "rmvpe",
+          checkpoint: str = "") -> dict:
     """Voice-convert /sources/<source_name> into <model_name>'s timbre via RVC."""
     model_name = _canonical_model_name(model_name)
     _ensure_applio_config()
 
     art = Path("/vol") / "artifacts" / model_name
-    pth = art / f"{model_name}.pth"
+    if checkpoint:
+        checkpoint_name = Path(checkpoint).name
+        if not checkpoint_name.endswith(".pth") or checkpoint_name.startswith(("G_", "D_")):
+            raise SystemExit("checkpoint must be an extracted inference .pth, not a G_/D_ trainer checkpoint")
+        pth = art / checkpoint_name
+    else:
+        pth = art / f"{model_name}.pth"
     indexes = sorted(art.glob("*.index"), key=lambda f: f.stat().st_size, reverse=True)
     src = Path("/vol") / "sources" / source_name
     if not pth.exists():
@@ -296,7 +303,8 @@ def infer(model_name: str = DEFAULT_MODEL_NAME, source_name: str = "source.wav",
 
 @app.local_entrypoint()
 def infer_main(model_name: str = DEFAULT_MODEL_NAME, source_name: str = "source.wav",
-               index_rate: float = 0.5, pitch: int = 0, f0_method: str = "rmvpe") -> None:
-    r = infer.remote(model_name, source_name, index_rate, pitch, f0_method)
+               index_rate: float = 0.5, pitch: int = 0, f0_method: str = "rmvpe",
+               checkpoint: str = "") -> None:
+    r = infer.remote(model_name, source_name, index_rate, pitch, f0_method, checkpoint)
     print("\nDONE:", r)
     print(f"download + listen:\n  modal volume get rvc-vol /outputs/{r['output']} ./")

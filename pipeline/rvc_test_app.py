@@ -30,12 +30,29 @@ HOST = os.environ.get("RVC_TEST_HOST", "127.0.0.1")
 PORT = int(os.environ.get("RVC_TEST_PORT", "8765"))
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 
+MODEL_SET_NAME = "250-epoch RVC models"
+
 MODELS = {
-    "trump": "Donald Trump",
-    "jfk": "JFK",
-    "mlk": "MLK",
-    "queen_elizabeth": "Queen Elizabeth II",
-    "obama": "Obama",
+    "trump": {
+        "label": "Donald Trump",
+        "checkpoint": "trump_250e_8500s.pth",
+    },
+    "jfk": {
+        "label": "JFK",
+        "checkpoint": "jfk_250e_8250s.pth",
+    },
+    "mlk": {
+        "label": "MLK",
+        "checkpoint": "mlk_250e_7250s.pth",
+    },
+    "queen_elizabeth": {
+        "label": "Queen Elizabeth II",
+        "checkpoint": "queen_elizabeth_250e_5500s.pth",
+    },
+    "obama": {
+        "label": "Obama",
+        "checkpoint": "obama_250e_9500s.pth",
+    },
 }
 
 
@@ -44,7 +61,7 @@ HTML = """<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>RVC Voice Tester</title>
+  <title>RVC Voice Tester - 250 Epochs</title>
   <style>
     :root {
       color-scheme: light;
@@ -314,11 +331,11 @@ HTML = """<!doctype html>
         <div class="field">
           <label for="modelSelect">Target voice</label>
           <select id="modelSelect">
-            <option value="trump">Donald Trump</option>
-            <option value="jfk">JFK</option>
-            <option value="mlk">MLK</option>
-            <option value="queen_elizabeth">Queen Elizabeth II</option>
-            <option value="obama">Obama</option>
+            <option value="trump">Donald Trump - 250e</option>
+            <option value="jfk">JFK - 250e</option>
+            <option value="mlk">MLK - 250e</option>
+            <option value="queen_elizabeth">Queen Elizabeth II - 250e</option>
+            <option value="obama">Obama - 250e</option>
           </select>
         </div>
 
@@ -451,7 +468,7 @@ HTML = """<!doctype html>
 
       setStatus("Converting", true);
       setBusy(true);
-      log(`Sending to ${modelSelect.options[modelSelect.selectedIndex].text}`);
+        log(`Sending to ${modelSelect.options[modelSelect.selectedIndex].text}`);
 
       try {
         const response = await fetch(`/api/convert?${params}`, {
@@ -549,7 +566,7 @@ class Handler(BaseHTTPRequestHandler):
             self.respond_bytes(HTML.encode("utf-8"), "text/html; charset=utf-8")
             return
         if parsed.path == "/api/models":
-            self.respond_json({"models": MODELS})
+            self.respond_json({"model_set": MODEL_SET_NAME, "models": MODELS})
             return
         if parsed.path.startswith("/outputs/"):
             self.serve_output(parsed.path.removeprefix("/outputs/"))
@@ -583,6 +600,7 @@ class Handler(BaseHTTPRequestHandler):
 
         index_rate = parse_float(params.get("index_rate", ["0.5"])[0], 0.5, 0.0, 1.0)
         pitch = parse_int(params.get("pitch", ["0"])[0], 0, -24, 24)
+        checkpoint = MODELS[model]["checkpoint"]
         job_id = uuid.uuid4().hex[:12]
         raw_ext = extension_for(self.headers.get("Content-Type", ""))
         raw_path = UPLOAD_DIR / f"{job_id}{raw_ext}"
@@ -632,6 +650,8 @@ class Handler(BaseHTTPRequestHandler):
                 str(index_rate),
                 "--pitch",
                 str(pitch),
+                "--checkpoint",
+                checkpoint,
             ],
             timeout=900,
         )
@@ -650,6 +670,8 @@ class Handler(BaseHTTPRequestHandler):
         self.respond_json(
             {
                 "model": model,
+                "model_label": MODELS[model]["label"],
+                "checkpoint": checkpoint,
                 "output_name": output_name,
                 "output_url": f"/outputs/{output_name}",
                 "elapsed_seconds": time.monotonic() - start,

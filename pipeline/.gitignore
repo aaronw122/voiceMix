@@ -1,0 +1,8 @@
+# Never commit audio data — too big, and rights-encumbered.
+data/
+*.wav
+*.flac
+*.mp3
+*.m4a
+*.opus
+*.webm
