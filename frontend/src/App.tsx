@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PersonaScroller } from "./components/PersonaScroller";
+import { PersonaPicker } from "./components/PersonaPicker";
 import { RecordPage } from "./components/RecordPage";
 import { ReviewPage } from "./components/ReviewPage";
 import { NavBar, type NavConfig } from "./components/NavBar";
@@ -30,7 +31,19 @@ const TRANSFORM_STATUS = [
   "Rendering new audio…",
 ];
 
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const m = window.matchMedia(query);
+    const handler = () => setMatches(m.matches);
+    m.addEventListener("change", handler);
+    return () => m.removeEventListener("change", handler);
+  }, [query]);
+  return matches;
+}
+
 export function App() {
+  const isDesktop = useMediaQuery("(min-width: 480px)");
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [personaId, setPersonaId] = useState("");
   const [step, setStep] = useState<Step>("persona");
@@ -237,7 +250,7 @@ export function App() {
   const idx = STEP_INDEX[step];
 
   const nav: NavConfig = {
-    persona: { title: "Choose a Voice", left: null, right: { label: "Next", onClick: () => setStep("record"), disabled: !personaId, strong: true } },
+    persona: { title: "Choose a Voice", left: null, right: null },
     record: { title: persona ? persona.name : "Record", left: { back: true, onClick: backToPersona }, right: null },
     transforming: { title: "Transforming", left: null, right: null },
     review: { title: "Preview", left: { back: true, onClick: goRecord }, right: { label: "Share", onClick: share, strong: true, color: SEND_COLOR } },
@@ -278,15 +291,49 @@ export function App() {
           >
             {/* PAGE 1 — persona */}
             <Page>
-              <div style={{ height: "100%", display: "flex", flexDirection: "column", justifyContent: "center", paddingBottom: 24 }}>
-                <p style={{ fontSize: 13.5, color: "rgba(255,255,255,0.5)", textAlign: "center", margin: "0 0 18px", lineHeight: 1.45, padding: "0 34px" }}>
-                  Pick a voice. Your recording will be re-voiced in this persona.
-                </p>
-                {personas.length > 0 ? (
-                  <PersonaScroller personas={personas} value={personaId} onChange={setPersonaId} />
-                ) : (
-                  <p style={{ textAlign: "center", color: "rgba(255,255,255,0.35)", fontSize: 14 }}>Loading voices…</p>
-                )}
+              <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+                <div
+                  style={
+                    isDesktop
+                      ? { display: "flex", flexDirection: "column", justifyContent: "flex-start", paddingTop: 12 }
+                      : { flex: 1, minHeight: 0, display: "flex", flexDirection: "column", justifyContent: "center" }
+                  }
+                >
+                  {personas.length > 0 ? (
+                    isDesktop ? (
+                      <PersonaPicker personas={personas} value={personaId} onChange={setPersonaId} />
+                    ) : (
+                      <PersonaScroller personas={personas} value={personaId} onChange={setPersonaId} />
+                    )
+                  ) : (
+                    <p style={{ textAlign: "center", color: "rgba(255,255,255,0.35)", fontSize: 14 }}>Loading voices…</p>
+                  )}
+                </div>
+                <div style={{ flexShrink: 0, padding: isDesktop ? "4px 24px 0" : "8px 24px 28px" }}>
+                  <button
+                    onClick={() => setStep("record")}
+                    disabled={!personaId}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      maxWidth: 420,
+                      margin: "0 auto",
+                      height: 52,
+                      borderRadius: 26,
+                      border: "none",
+                      cursor: personaId ? "pointer" : "default",
+                      background: persona ? `linear-gradient(145deg, ${persona.c1}, ${persona.c2})` : "rgba(255,255,255,0.1)",
+                      color: "#fff",
+                      fontSize: 17,
+                      fontWeight: 600,
+                      boxShadow: persona ? `0 8px 28px ${persona.c2}55` : "none",
+                      opacity: personaId ? 1 : 0.5,
+                      transition: "opacity .2s, box-shadow .3s, background .3s",
+                    }}
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             </Page>
 
