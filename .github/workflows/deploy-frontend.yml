@@ -85,12 +85,12 @@ jobs:
             docker compose pull frontend
             docker compose up -d --no-deps frontend
             # Post-deploy health gate: fail the deploy if nginx isn't serving the SPA.
-            ok=""
-            for i in $(seq 1 15); do
-              if docker compose exec -T frontend wget -qO- http://localhost/ >/dev/null 2>&1; then ok="yes"; break; fi
+            frontend_ready=""
+            for attempt in $(seq 1 15); do
+              if docker compose exec -T frontend wget -qO- http://localhost/ >/dev/null 2>&1; then frontend_ready="yes"; break; fi
               sleep 2
             done
-            if [ -z "$ok" ]; then
+            if [ -z "$frontend_ready" ]; then
               echo "::error::frontend did not serve after deploy"
               docker compose ps
               docker compose logs --tail=50 frontend
