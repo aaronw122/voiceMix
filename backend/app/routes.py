@@ -121,8 +121,14 @@ async def share(request: Request, clip_id: str):
     clip = db.get_clip(clip_id)
     if clip is None:
         raise HTTPException(404, "Clip not found")
+    base = _base_url(request)
     return templates.TemplateResponse(
         request,
         "share.html",
-        {"title": clip["title"], "audio_url": storage.url_for(clip["object_key"], _base_url(request))},
+        {
+            "title": clip["title"],
+            "audio_url": storage.url_for(clip["object_key"], base),
+            "page_url": f"{base}/share/{clip_id}",
+            "image_url": f"{base}/static/share-card.png",
+        },
     )
