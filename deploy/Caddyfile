@@ -1,12 +1,8 @@
-# Caddy auto-provisions HTTPS for real domains (needed: mic getUserMedia +
-# browser calling the API from an HTTPS page require a secure origin).
-# Point API_DOMAIN / STORAGE_DOMAIN DNS A-records at the box first.
+# Caddy auto-provisions HTTPS for a real domain (mic getUserMedia + the browser
+# calling the API from an HTTPS page both need a secure origin).
+# Point API_DOMAIN's DNS A-record at the box first — or front it with a
+# Cloudflare Tunnel (then Cloudflare terminates TLS and this can be simplified).
 
 {$API_DOMAIN} {
 	reverse_proxy backend:8000
-}
-
-# Public S3 endpoint so clients can fetch presigned MinIO URLs over HTTPS.
-{$STORAGE_DOMAIN} {
-	reverse_proxy minio:9000
 }

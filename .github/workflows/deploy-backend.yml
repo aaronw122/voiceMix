@@ -13,6 +13,11 @@ on:
       - '.github/workflows/deploy-backend.yml'
   workflow_dispatch:
 
+# One deploy at a time — never let overlapping main pushes race the box.
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
 env:
   IMAGE: ghcr.io/aaronw122/voicemix-backend
 
@@ -70,7 +75,22 @@ jobs:
           script: |
             set -e
             cd ~/voicemix
+            # Deploy the exact image this commit built (pinned, not mutable :latest) — enables rollback.
+            export BACKEND_IMAGE_TAG="sha-${{ github.sha }}"
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
             docker compose pull
             docker compose up -d
+            # Post-deploy health gate: fail the deploy if the backend doesn't come up healthy.
+            ok=""
+            for i in $(seq 1 15); do
+              if curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1; then ok="yes"; break; fi
+              sleep 2
+            done
+            if [ -z "$ok" ]; then
+              echo "::error::backend /health did not pass after deploy"
+              docker compose ps
+              docker compose logs --tail=50 backend
+              exit 1
+            fi
+            echo "health OK — backend is serving"
             docker image prune -f
