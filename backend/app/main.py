@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -24,10 +25,14 @@ async def _lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     db.init_db()
     app = FastAPI(title="voiceMix", lifespan=_lifespan)
-    app.state.engines = {
-        "elevenlabs": ElevenLabsEngine(),
-        "modal": StubModalEngine(),
-    }
+    if os.environ.get("FAKE_ENGINES") == "1":
+        # keyless dev/demo-fallback mode: every voice runs the stub (passthrough audio)
+        app.state.engines = {"elevenlabs": StubModalEngine(), "modal": StubModalEngine()}
+    else:
+        app.state.engines = {
+            "elevenlabs": ElevenLabsEngine(),
+            "modal": StubModalEngine(),
+        }
     app.include_router(router)
     app.mount("/audio", StaticFiles(directory=storage.audio_dir()), name="audio")
     app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
