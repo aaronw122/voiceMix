@@ -27,7 +27,7 @@ unchanged: both convert endpoints return `{ url, title, audioUrl }`.
 ```
 client ──POST /convert or /impersonate──> FastAPI
                                             │ validate (≤1 min, ≤10 MB)
-                                            │ audio.py: ffmpeg → WAV 16kHz mono
+                                            │ audio.py: ffmpeg → WAV 48kHz mono
                                             │ engines.py: VoiceEngine.transform() → MP3 bytes
                                             │ storage.py: save → data/audio/<key>.mp3
                                             │ db.py: INSERT clip row (SQLite)

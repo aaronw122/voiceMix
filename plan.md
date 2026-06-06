@@ -95,7 +95,7 @@ No single upload format — formats the browser records in differ depending on w
 │ 1. record native       │     │                                                  │
 │    webm / m4a / wav     │     │                                                  │
 │         │              │     │                                                  │
-│  2. POST /convert ─────┼────►│ 3. ffmpeg → WAV 16kHz mono                       │
+│  2. POST /convert ─────┼────►│ 3. ffmpeg → WAV 48kHz mono                       │
 │     (bytes)            │     │         │                                        │
 │                        │     │         ▼                                        │
 │                        │     │  4. ElevenLabs STS ──► MP3 (external API call)   │
