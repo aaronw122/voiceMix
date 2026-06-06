@@ -30,8 +30,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: docker/setup-buildx-action@v3
-
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -39,19 +37,26 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: ./frontend
-          push: true
-          # The API base URL is baked into the bundle at build time (Vite inlines VITE_*).
-          build-args: |
-            VITE_API_BASE_URL=https://voiceapi.awill.co
-          tags: |
-            ${{ env.IMAGE }}:latest
-            ${{ env.IMAGE }}:sha-${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      # Plain `docker build` uses the daemon's built-in BuildKit, so it never pulls
+      # a separate buildx/buildkit image from Docker Hub (that pull is what timed
+      # out and flaked the first run). The retry loop also absorbs transient Docker
+      # Hub timeouts when pulling base images. VITE_API_BASE_URL is inlined at build.
+      - name: Build and push (retried)
+        run: |
+          build_and_push() {
+            docker build \
+              --build-arg VITE_API_BASE_URL=https://voiceapi.awill.co \
+              -t "$IMAGE:latest" -t "$IMAGE:sha-${{ github.sha }}" \
+              ./frontend &&
+            docker push "$IMAGE:latest" &&
+            docker push "$IMAGE:sha-${{ github.sha }}"
+          }
+          for attempt in 1 2 3; do
+            if build_and_push; then echo "build+push succeeded (attempt $attempt)"; exit 0; fi
+            echo "::warning::build+push attempt $attempt failed; retrying in 15s"
+            sleep 15
+          done
+          echo "::error::build+push failed after 3 attempts"; exit 1
 
   deploy:
     needs: build
@@ -85,9 +90,11 @@ jobs:
             docker compose pull frontend
             docker compose up -d --no-deps frontend
             # Post-deploy health gate: fail the deploy if nginx isn't serving the SPA.
+            # Probe 127.0.0.1 (not localhost): wget/curl resolve localhost to ::1,
+            # but nginx listens on IPv4 :80, so a localhost probe false-fails.
             frontend_ready=""
             for attempt in $(seq 1 15); do
-              if docker compose exec -T frontend wget -qO- http://localhost/ >/dev/null 2>&1; then frontend_ready="yes"; break; fi
+              if docker compose exec -T frontend curl -fsS http://127.0.0.1/ >/dev/null 2>&1; then frontend_ready="yes"; break; fi
               sleep 2
             done
             if [ -z "$frontend_ready" ]; then

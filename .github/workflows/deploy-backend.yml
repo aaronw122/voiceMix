@@ -30,8 +30,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: docker/setup-buildx-action@v3
-
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -39,16 +37,23 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: ./backend
-          push: true
-          tags: |
-            ${{ env.IMAGE }}:latest
-            ${{ env.IMAGE }}:sha-${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      # Plain `docker build` uses the daemon's built-in BuildKit, so it never pulls
+      # a separate buildx/buildkit image from Docker Hub (that pull is what timed
+      # out and flaked the run). The retry loop also absorbs transient Docker Hub
+      # timeouts when pulling the base image.
+      - name: Build and push (retried)
+        run: |
+          build_and_push() {
+            docker build -t "$IMAGE:latest" -t "$IMAGE:sha-${{ github.sha }}" ./backend &&
+            docker push "$IMAGE:latest" &&
+            docker push "$IMAGE:sha-${{ github.sha }}"
+          }
+          for attempt in 1 2 3; do
+            if build_and_push; then echo "build+push succeeded (attempt $attempt)"; exit 0; fi
+            echo "::warning::build+push attempt $attempt failed; retrying in 15s"
+            sleep 15
+          done
+          echo "::error::build+push failed after 3 attempts"; exit 1
 
   deploy:
     needs: build
