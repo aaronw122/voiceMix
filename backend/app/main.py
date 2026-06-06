@@ -5,6 +5,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -39,6 +40,14 @@ def create_app() -> FastAPI:
             "elevenlabs": ElevenLabsEngine() if sts_mode else ElevenLabsSttTtsEngine(),
             "modal": StubModalEngine(),
         }
+    # The React SPA is served from a different origin (voicemix.awill.co) than the
+    # API (voiceapi.awill.co) — ported from the placeholder backend Aaron wired for it.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["https://voicemix.awill.co", "http://localhost:5173"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     app.include_router(router)
     app.mount("/audio", StaticFiles(directory=storage.audio_dir()), name="audio")
     app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")

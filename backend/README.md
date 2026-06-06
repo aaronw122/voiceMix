@@ -40,7 +40,5 @@ N/A — this service is a one-shot speech-to-speech pipeline, not a voice agent.
 
 ## Known fast-follows (deliberately not in this PR)
 
-- **CORS is not wired** — the web frontend's first cross-origin call will fail until
-  `CORSMiddleware` is added in `app/main.py` (one line; permissive is fine for the demo).
 - `/share/<unknown-id>` returns the JSON error shape, not an HTML 404 page.
 - `og:image` is absent from the share page, so iMessage link previews are plain.
