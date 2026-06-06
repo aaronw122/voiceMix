@@ -34,7 +34,7 @@ def test_convert_happy_path(client, app):
     assert "/share/" in body["url"]
 
     # the engine got the ELEVENLABS id, not the catalog id
-    assert fake.last_call["voice_id"] == "JBFqnCBsd6RMkjVDRZzb"
+    assert fake.last_call["voice_id"] == "pqHfZKP75CvOlQylNhV4"
 
     # the audioUrl actually serves the engine's MP3
     audio_resp = client.get(body["audioUrl"].replace("http://testserver", ""))

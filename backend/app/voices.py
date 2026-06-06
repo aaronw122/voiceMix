@@ -8,7 +8,7 @@ VOICES = [
         "name": "Old Man",
         "engine": "elevenlabs",
         "acceptsText": False,
-        "elevenVoiceId": "JBFqnCBsd6RMkjVDRZzb",  # George — warm older male (placeholder)
+        "elevenVoiceId": "pqHfZKP75CvOlQylNhV4",  # Bill — american, age=old ("Wise, Mature, Balanced")
     },
     {
         "id": "young-woman",
