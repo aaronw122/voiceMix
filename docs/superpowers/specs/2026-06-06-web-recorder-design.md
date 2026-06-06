@@ -26,3 +26,10 @@ MP3 → share). Full Stage-2 surface: recorder, voice picker, playback, file-fir
 ## Testing
 Route/template/static via pytest; mic/JS behavior via manual browser pass against the live
 server (mic APIs unavailable in pytest).
+
+## Resolution (same day)
+
+The team scaffolded the plan.md React SPA in `frontend/` (PRs #5–#8) in parallel. Decision:
+**the SPA is the product/demo UI; this static page is the backend's dev console** — a
+zero-dependency surface for exercising the pipeline. Both consume the same API (SPA
+cross-origin via CORS, dev console same-origin).

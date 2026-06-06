@@ -1,7 +1,11 @@
 # voiceMix backend
 
-FastAPI service: `/convert` (ElevenLabs STS), `/impersonate` (stub → John's Modal engine),
+FastAPI service: `/convert` (ElevenLabs STT→TTS), `/impersonate` (stub → John's Modal engine),
 `/voices`, `/share/:id`, static `/audio/*`. Spec: `../docs/superpowers/specs/2026-06-06-backend-two-endpoints-design.md`.
+
+**Frontends:** the React SPA in `../frontend/` (voicemix.awill.co) is the product/demo UI.
+The recorder page this backend serves at `/` is a **dev console** — a zero-dependency way to
+exercise the full pipeline (record → convert → share) without running the SPA.
 
 ## Run
 
