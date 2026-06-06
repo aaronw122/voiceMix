@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
@@ -29,6 +30,7 @@ def create_app() -> FastAPI:
     }
     app.include_router(router)
     app.mount("/audio", StaticFiles(directory=storage.audio_dir()), name="audio")
+    app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
     @app.get("/healthz")
     @app.get("/health")  # alias: deploy pipeline (Dockerfile HEALTHCHECK + CI gate) probes /health

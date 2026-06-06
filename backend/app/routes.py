@@ -101,6 +101,11 @@ async def convert(
     return _persist(mp3, voice["name"])
 
 
+@router.get("/", response_class=HTMLResponse)
+async def index(request: Request):
+    return templates.TemplateResponse(request, "index.html", {})
+
+
 @router.get("/share/{clip_id}", response_class=HTMLResponse)
 async def share(request: Request, clip_id: str):
     clip = db.get_clip(clip_id)
