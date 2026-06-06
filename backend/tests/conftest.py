@@ -29,4 +29,5 @@ def app(tmp_path, monkeypatch):
 
 @pytest.fixture
 def client(app):
-    return TestClient(app)
+    with TestClient(app) as client:  # context manager runs the lifespan
+        yield client
