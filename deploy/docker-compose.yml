@@ -18,6 +18,10 @@
 #
 # Per-deploy, each CI pipeline scopes to its own service (`up -d --no-deps <svc>`),
 # so a backend deploy never touches the frontend or cloudflared, and vice versa.
+# Caveat: because deploys are service-scoped, changes to cloudflared or other
+# shared/infra settings here are NOT applied by an ordinary app deploy. After
+# editing cloudflared (e.g. this image tag) run a full reconcile on the box:
+#   cd ~/voicemix && docker compose up -d
 
 services:
   backend:
@@ -39,7 +43,7 @@ services:
   # Reaches backend (:8000) and frontend (:80) over the compose network.
   # Routes themselves live in the Cloudflare dashboard, not here.
   cloudflared:
-    image: cloudflare/cloudflared:latest
+    image: cloudflare/cloudflared:2026.5.2
     restart: unless-stopped
     command: tunnel --no-autoupdate run
     environment:
