@@ -4,11 +4,43 @@ conversations/
 .env
 .env.*
 !.env.example
+*.pem
+*.key
 
-# backend
+# backend (Python / uv)
 backend/data/
-backend/.env
 backend/smoke_output.mp3
 __pycache__/
+*.py[cod]
 .venv/
-*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# frontend (React / Vite — scaffolded later)
+node_modules/
+frontend/dist/
+.vite/
+*.tsbuildinfo
+npm-debug.log*
+pnpm-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+._*
+
+# editors / IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# logs & scratch
+*.log
+tmp/
