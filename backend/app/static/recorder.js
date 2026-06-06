@@ -22,7 +22,10 @@ let current = null; // result currently in the player
 let timerId = null;
 let autoStopId = null;
 
-const EMOJI = { "old-man": "👴", "young-woman": "👩", "jfk": "🎩", "femme-fatale": "💋" };
+const EMOJI = {
+  "old-man": "👴", "young-woman": "👩", "femme-fatale": "💋",
+  "jfk": "🎩", "trump": "🦅", "obama": "🇺🇸", "mlk": "✊", "queen_elizabeth": "👑",
+};
 
 function toast(msg) {
   toastEl.textContent = msg;

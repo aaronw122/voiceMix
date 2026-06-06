@@ -103,9 +103,43 @@ class ElevenLabsSttTtsEngine:
         return resp.content
 
 
+RVC_MAX_SECONDS = 30.0  # John's endpoint caps input at 30s
+
+
+class RvcModalEngine:
+    """John's RVC voice-conversion models on Modal (trump/jfk/mlk/queen_elizabeth/obama).
+
+    RVC swaps timbre and KEEPS the sender's delivery — the opposite trade from the
+    ElevenLabs STT->TTS path. Audio-only (no text). Receives the CATALOG id; the
+    Modal app maps it to a trained model. Contract: raw WAV body in, WAV bytes out.
+    """
+
+    def __init__(self, client: httpx.AsyncClient | None = None, base_url: str | None = None):
+        self._base = (base_url or os.environ.get("MODAL_ENDPOINT_URL", "")).rstrip("/")
+        self._client = client or httpx.AsyncClient(timeout=120.0)  # cold starts run 15-45s
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
+
+    async def transform(self, wav: bytes | None, voice_id: str, text: str | None) -> bytes:
+        if text is not None:
+            raise EngineError("this voice needs a recording, not text")
+        if await asyncio.to_thread(audio.duration_seconds, wav) > RVC_MAX_SECONDS:
+            raise EngineError("recordings for this voice are capped at 30 seconds")
+        resp = await self._client.post(
+            f"{self._base}/convert",
+            params={"voice": voice_id, "index_rate": 0.5, "pitch": 0},
+            content=wav,  # raw WAV body — John's endpoint is not multipart
+            headers={"Content-Type": "audio/wav"},
+        )
+        if resp.status_code != 200:
+            logger.warning("RVC modal %s: %s", resp.status_code, resp.text[:300])
+            raise EngineError(f"RVC engine returned {resp.status_code}")
+        return await asyncio.to_thread(audio.wav_to_mp3, resp.content)
+
+
 class StubModalEngine:
-    """Path B placeholder. John: replace this class with the Whisper+TTS Modal client —
-    same signature, nothing else in the app changes."""
+    """Keyless fallback when MODAL_ENDPOINT_URL is unset (passthrough audio)."""
 
     async def transform(self, wav: bytes | None, voice_id: str, text: str | None) -> bytes:
         # voice_id intentionally unused — stub returns passthrough/placeholder audio

@@ -21,15 +21,16 @@ exercise the full pipeline (record → convert → share) without running the SP
     uv run pytest                          # no network, no key needed
     uv run python scripts/smoke.py         # manual: real ElevenLabs round-trip
 
-## John: plugging in the Modal engine
+## John's RVC engine (wired)
 
-Replace `StubModalEngine` in `app/engines.py` with a class implementing:
-
-    async def transform(self, wav: bytes | None, voice_id: str, text: str | None) -> bytes
-
-`voice_id` is the catalog id from `app/voices.py` (e.g. "jfk"); exactly one of
-`wav`/`text` is non-None; return MP3 bytes. Raise `EngineError` on failure → the
-route returns a clean 502. Nothing else needs to change.
+`RvcModalEngine` calls the Modal endpoint when `MODAL_ENDPOINT_URL` is set (unset → the
+passthrough stub). Contract in use: `POST {url}/convert?voice={catalog_id}&index_rate=0.5&pitch=0`
+with a **raw WAV body** (48kHz mono, ≤30s) → WAV bytes back, transcoded to MP3 here.
+Celebrity voices in the catalog: jfk, trump, obama, mlk, queen_elizabeth — all
+`acceptsText: false` (RVC converts audio; it keeps the SENDER's delivery, unlike the
+ElevenLabs STT→TTS path which re-performs in the target's delivery). New voice = train the
+model on Modal + add a catalog entry with the same id. `keep_warm=1` before the demo —
+cold starts run 15–45s.
 
 ## ElevenLabs integration notes
 
