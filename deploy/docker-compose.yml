@@ -1,22 +1,23 @@
-# Backend server stack — runs on the Hetzner box.
-# The box PULLS the prebuilt image (built+pushed by CI); it never compiles.
+# App stack — runs on the Hetzner box.
+# The box PULLS prebuilt images (built+pushed by CI); it never compiles.
 # Storage is on-disk: audio clips + SQLite metadata live on the `clipdata` volume.
-# No MinIO, no Postgres. Frontend deploys separately (its own image + pipeline).
+# No MinIO, no Postgres. Backend and frontend have separate images + pipelines.
 #
 # Public access is via a Cloudflare Tunnel — cloudflared makes an OUTBOUND
 # connection to Cloudflare and traffic flows back down it. The box opens NO
 # public ports (no 80/443); TLS terminates at Cloudflare's edge. Ingress routes
-# (api.voicemix.awill.co -> backend:8000) are configured in the Cloudflare
-# dashboard for the token's tunnel — not here.
+# are configured in the Cloudflare dashboard for the token's tunnel — not here:
+#   voiceapi.awill.co  -> backend:8000
+#   voicemix.awill.co  -> frontend:80
 #
 # One-time on the box:
 #   mkdir -p ~/voicemix && cd ~/voicemix
 #   cp .env.example .env   # fill in real secrets once (CI ships .env.example, leaves .env)
 #   docker login ghcr.io   # CI also logs in during deploy
-#   docker compose up -d   # brings up backend + cloudflared (the edge tunnel)
+#   docker compose up -d   # brings up backend + frontend + cloudflared
 #
-# Per-deploy, CI scopes to its own service (`up -d --no-deps backend`), so a
-# backend deploy never touches cloudflared or a future frontend container.
+# Per-deploy, each CI pipeline scopes to its own service (`up -d --no-deps <svc>`),
+# so a backend deploy never touches the frontend or cloudflared, and vice versa.
 
 services:
   backend:
@@ -28,10 +29,15 @@ services:
     ports:
       - "127.0.0.1:8000:8000"     # local-only: CI health gate + SSH-tunnel debugging
 
+  # Static SPA (Vite build served by nginx on :80). cloudflared routes
+  # voicemix.awill.co here. No host ports — reached only over the compose network.
+  frontend:
+    image: ghcr.io/aaronw122/voicemix-frontend:${FRONTEND_IMAGE_TAG:-latest}
+    restart: unless-stopped
+
   # Edge tunnel — remotely-managed (dashboard) tunnel selected by CF_TUNNEL_TOKEN.
-  # Reaches backend over the compose network as http://backend:8000.
-  # Add a frontend route in the dashboard (-> http://frontend:80) once that
-  # container exists; no change needed here.
+  # Reaches backend (:8000) and frontend (:80) over the compose network.
+  # Routes themselves live in the Cloudflare dashboard, not here.
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
@@ -40,6 +46,7 @@ services:
       TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN}
     depends_on:
       - backend
+      - frontend
 
 volumes:
   clipdata:
