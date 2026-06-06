@@ -44,4 +44,9 @@ def create_app() -> FastAPI:
         msg = f"{errors[0]['loc'][-1]}: {errors[0]['msg']}" if errors else "Invalid request"
         return JSONResponse({"error": msg}, status_code=422)
 
+    @app.exception_handler(Exception)
+    async def unhandled_error_shape(request, exc: Exception):
+        # keep the {"error": ...} contract even for bugs (e.g. corrupt DB rows)
+        return JSONResponse({"error": "Internal server error"}, status_code=500)
+
     return app
