@@ -28,7 +28,7 @@ def init_db() -> None:
 def insert_clip(clip_id: str, title: str, object_key: str, content_type: str = "audio/mpeg") -> None:
     with sqlite3.connect(_db_path()) as conn:
         conn.execute(
-            "INSERT INTO clips VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO clips (id, title, object_key, content_type, created_at) VALUES (?, ?, ?, ?, ?)",
             (clip_id, title, object_key, content_type, datetime.now(timezone.utc).isoformat()),
         )
 
