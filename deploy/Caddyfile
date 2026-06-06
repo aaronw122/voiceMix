@@ -1,8 +1,0 @@
-# Caddy auto-provisions HTTPS for a real domain (mic getUserMedia + the browser
-# calling the API from an HTTPS page both need a secure origin).
-# Point API_DOMAIN's DNS A-record at the box first — or front it with a
-# Cloudflare Tunnel (then Cloudflare terminates TLS and this can be simplified).
-
-{$API_DOMAIN} {
-	reverse_proxy backend:8000
-}
