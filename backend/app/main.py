@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import db, storage
@@ -31,5 +32,9 @@ def create_app() -> FastAPI:
     @app.get("/healthz")
     async def healthz():
         return {"ok": True}
+
+    @app.exception_handler(HTTPException)
+    async def error_shape(request, exc: HTTPException):
+        return JSONResponse({"error": exc.detail}, status_code=exc.status_code)
 
     return app

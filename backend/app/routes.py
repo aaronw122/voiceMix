@@ -1,10 +1,71 @@
-from fastapi import APIRouter
+import asyncio
+import os
+import uuid
 
-from .voices import list_voices
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+
+from . import db, storage
+from .audio import AudioDecodeError, duration_seconds, normalize_to_wav
+from .engines import EngineError
+from .voices import get_voice, list_voices
 
 router = APIRouter()
+
+MAX_BYTES = 10 * 1024 * 1024  # 10 MB
+MAX_SECONDS = 60.0
+
+
+def _base_url() -> str:
+    return os.environ.get("BASE_URL", "http://localhost:8000").rstrip("/")
+
+
+async def _read_and_normalize(upload: UploadFile) -> bytes:
+    data = await upload.read()
+    if len(data) > MAX_BYTES:
+        raise HTTPException(413, "Recording is over the 10 MB limit")
+    try:
+        wav = await asyncio.to_thread(normalize_to_wav, data)
+    except AudioDecodeError:
+        raise HTTPException(422, "Couldn't read that recording")
+    if await asyncio.to_thread(duration_seconds, wav) > MAX_SECONDS:
+        raise HTTPException(422, "Recording is over the 1 minute limit")
+    return wav
+
+
+def _persist(mp3: bytes, voice_name: str) -> dict:
+    key = storage.save(mp3)
+    clip_id = uuid.uuid4().hex[:10]
+    title = f"{voice_name} — voiceMix clip"
+    db.insert_clip(clip_id, title, key)
+    return {
+        "url": f"{_base_url()}/share/{clip_id}",
+        "title": title,
+        "audioUrl": storage.url_for(key),
+    }
 
 
 @router.get("/voices")
 async def voices():
     return list_voices()
+
+
+@router.post("/convert")
+async def convert(
+    request: Request,
+    audio: UploadFile = File(...),
+    voiceId: str = Form(...),
+):
+    voice = get_voice(voiceId)
+    if voice is None:
+        raise HTTPException(404, f"Unknown voice: {voiceId}")
+    if voice["engine"] != "elevenlabs":
+        raise HTTPException(422, f"Voice {voiceId} belongs on POST /impersonate")
+
+    wav = await _read_and_normalize(audio)
+    engine = request.app.state.engines["elevenlabs"]
+    try:
+        mp3 = await engine.transform(wav, voice["elevenVoiceId"], None)
+    except EngineError as e:
+        raise HTTPException(502, f"Voice engine failed: {e}")
+
+    return _persist(mp3, voice["name"])
