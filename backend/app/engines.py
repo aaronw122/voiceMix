@@ -55,7 +55,7 @@ class ElevenLabsEngine:
 
 ELEVENLABS_STT_URL = "https://api.elevenlabs.io/v1/speech-to-text"
 ELEVENLABS_TTS_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
-ELEVENLABS_STT_MODEL = "scribe_v1"
+ELEVENLABS_STT_MODEL = "scribe_v2"
 ELEVENLABS_TTS_MODEL = "eleven_multilingual_v2"
 
 

@@ -65,7 +65,7 @@ def test_stt_tts_engine_transcribes_then_synthesizes(monkeypatch):
     out = asyncio.run(engine.transform(b"WAVBYTES", "pqHfZKP75CvOlQylNhV4", None))
 
     assert out == b"MP3_FROM_TTS"
-    assert b"scribe_v1" in seen["stt_body"]
+    assert b"scribe_v2" in seen["stt_body"]
     assert "text-to-speech/pqHfZKP75CvOlQylNhV4" in seen["tts_url"]
     assert "output_format=mp3_44100_192" in seen["tts_url"]
     assert b"hello there" in seen["tts_json"]  # the transcript is what gets spoken
