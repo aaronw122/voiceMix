@@ -1,0 +1,12 @@
+# Caddy auto-provisions HTTPS for real domains (needed: mic getUserMedia +
+# browser calling the API from an HTTPS page require a secure origin).
+# Point API_DOMAIN / STORAGE_DOMAIN DNS A-records at the box first.
+
+{$API_DOMAIN} {
+	reverse_proxy backend:8000
+}
+
+# Public S3 endpoint so clients can fetch presigned MinIO URLs over HTTPS.
+{$STORAGE_DOMAIN} {
+	reverse_proxy minio:9000
+}
