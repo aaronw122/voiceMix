@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import db, storage
-from .engines import ElevenLabsEngine, ElevenLabsSttTtsEngine, StubModalEngine
+from .engines import ElevenLabsEngine, ElevenLabsSttTtsEngine, RvcModalEngine, StubModalEngine
 from .routes import router
 
 logger = logging.getLogger(__name__)
@@ -38,7 +38,8 @@ def create_app() -> FastAPI:
         sts_mode = os.environ.get("ELEVENLABS_MODE") == "sts"
         app.state.engines = {
             "elevenlabs": ElevenLabsEngine() if sts_mode else ElevenLabsSttTtsEngine(),
-            "modal": StubModalEngine(),
+            # John's RVC models when his Modal endpoint is configured; stub otherwise
+            "modal": RvcModalEngine() if os.environ.get("MODAL_ENDPOINT_URL") else StubModalEngine(),
         }
     # The React SPA is served from a different origin (voicemix.awill.co) than the
     # API (voiceapi.awill.co) — ported from the placeholder backend Aaron wired for it.

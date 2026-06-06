@@ -106,6 +106,72 @@ def test_stt_tts_engine_tts_error_raises(monkeypatch):
         asyncio.run(engine.transform(b"WAVBYTES", "voice", None))
 
 
+def _tiny_wav(seconds: float = 0.5) -> bytes:
+    import io
+    import wave
+
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(8000)
+        w.writeframes(b"\x00\x00" * int(8000 * seconds))
+    return buf.getvalue()
+
+
+def test_rvc_engine_posts_raw_wav_and_transcodes_response():
+    from app.engines import RvcModalEngine
+
+    seen = {}
+    wav_in = _tiny_wav()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        seen["body"] = request.read()
+        seen["content_type"] = request.headers.get("content-type")
+        return httpx.Response(200, content=_tiny_wav())  # his endpoint returns WAV
+
+    engine = RvcModalEngine(
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        base_url="https://modal.test",
+    )
+    out = asyncio.run(engine.transform(wav_in, "jfk", None))
+
+    assert len(out) > 0  # transcoded to mp3
+    assert "/convert" in seen["url"]
+    assert "voice=jfk" in seen["url"]
+    assert "index_rate=0.5" in seen["url"]
+    assert seen["body"] == wav_in  # raw body, not multipart
+    assert seen["content_type"] == "audio/wav"
+
+
+def test_rvc_engine_rejects_text():
+    from app.engines import EngineError, RvcModalEngine
+
+    engine = RvcModalEngine(base_url="https://modal.test")
+    with pytest.raises(EngineError):
+        asyncio.run(engine.transform(None, "jfk", "ask not"))
+
+
+def test_rvc_engine_rejects_over_30s():
+    from app.engines import EngineError, RvcModalEngine
+
+    engine = RvcModalEngine(base_url="https://modal.test")
+    with pytest.raises(EngineError):
+        asyncio.run(engine.transform(_tiny_wav(seconds=31), "jfk", None))
+
+
+def test_rvc_engine_error_raises():
+    from app.engines import EngineError, RvcModalEngine
+
+    engine = RvcModalEngine(
+        client=httpx.AsyncClient(transport=httpx.MockTransport(lambda r: httpx.Response(500, text="boom"))),
+        base_url="https://modal.test",
+    )
+    with pytest.raises(EngineError):
+        asyncio.run(engine.transform(_tiny_wav(), "jfk", None))
+
+
 def test_stub_modal_engine_transcodes_audio():
     import io
     import wave

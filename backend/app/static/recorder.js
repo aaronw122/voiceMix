@@ -17,12 +17,19 @@ let mediaRecorder = null;
 let stream = null; // kept warm between takes — mic spin-up (1-3s on bluetooth) eats the head of recordings
 let starting = false; // re-entry guard: taps during the getUserMedia gap must not spawn a 2nd recorder
 let take = null; // {blob, ext} — the current recording
+let takeGen = 0; // bumped per take; stale conversion results check it before landing
 let results = {}; // voiceId -> {url, audioUrl, blob} (cache per take)
+let failures = {}; // voiceId -> error message (tap to retry)
+let inflight = {}; // voiceId -> true while a conversion is running
+let wanted = null; // voiceId the user tapped while it was still converting
 let current = null; // result currently in the player
 let timerId = null;
 let autoStopId = null;
 
-const EMOJI = { "old-man": "👴", "young-woman": "👩", "jfk": "🎩", "femme-fatale": "💋" };
+const EMOJI = {
+  "old-man": "👴", "young-woman": "👩", "femme-fatale": "💋",
+  "jfk": "🎩", "trump": "🦅", "obama": "🇺🇸", "mlk": "✊", "queen_elizabeth": "👑",
+};
 
 function toast(msg) {
   toastEl.textContent = msg;
@@ -138,9 +145,17 @@ async function startRecording() {
       return;
     }
     take = { blob, ext: type.includes("mp4") ? "m4a" : "webm" };
-    results = {}; // new take invalidates old conversions
+    takeGen++; // stale in-flight conversions from the previous take get ignored
+    results = {};
+    failures = {};
+    inflight = {};
+    wanted = null;
     statusEl.textContent = "pick a voice";
     voicesEl.classList.add("visible");
+    // ElevenLabs voices pre-convert in parallel (fast + cheap). Modal/celebrity
+    // voices convert on first tap — the Modal app is serial, so fanning out 5 at
+    // once just builds a long queue; warm containers make on-tap feel quick.
+    for (const v of voices) if (v.engine !== "modal") prefetch(v);
   };
   mediaRecorder.start();
   starting = false;
@@ -174,33 +189,58 @@ recordBtn.onclick = () => {
   else startRecording();
 };
 
-async function convert(voice, btn) {
-  if (!take) return;
-  if (results[voice.id]) return showResult(voice.id, btn); // same take, already converted
-
+async function convertRequest(voice) {
   const form = new FormData();
   form.append("audio", take.blob, `recording.${take.ext}`);
   form.append("voiceId", voice.id);
   const endpoint = voice.engine === "modal" ? "/impersonate" : "/convert";
+  const resp = await fetch(endpoint, { method: "POST", body: form });
+  const body = await resp.json();
+  if (!resp.ok) throw new Error(body.error || "something went wrong");
+  const audioBlob = await (await fetch(body.audioUrl)).blob();
+  return { ...body, blob: audioBlob };
+}
 
+function prefetch(voice) {
+  const gen = takeGen;
+  const btn = voicesEl.querySelector(`[data-id="${voice.id}"]`);
+  btn.classList.remove("ready", "failed");
   btn.classList.add("busy");
+  delete failures[voice.id];
+  inflight[voice.id] = true;
+  convertRequest(voice)
+    .then((data) => {
+      if (gen !== takeGen) return; // a newer take superseded this conversion
+      delete inflight[voice.id];
+      results[voice.id] = data;
+      btn.classList.remove("busy");
+      btn.classList.add("ready");
+      if (wanted === voice.id) showResult(voice.id, btn); // user was waiting on this card
+    })
+    .catch((err) => {
+      if (gen !== takeGen) return;
+      delete inflight[voice.id];
+      failures[voice.id] = err.message;
+      btn.classList.remove("busy");
+      btn.classList.add("failed");
+      if (wanted === voice.id) {
+        wanted = null;
+        statusEl.textContent = "pick a voice";
+        toast(err.message);
+      }
+    });
+}
+
+function convert(voice, btn) {
+  if (!take) return;
+  if (results[voice.id]) return showResult(voice.id, btn); // ready — instant
+  wanted = voice.id; // play it the moment it lands
   statusEl.textContent = `cooking ${voice.name}…`;
-  try {
-    const resp = await fetch(endpoint, { method: "POST", body: form });
-    const body = await resp.json();
-    if (!resp.ok) throw new Error(body.error || "something went wrong");
-    const audioBlob = await (await fetch(body.audioUrl)).blob();
-    results[voice.id] = { ...body, blob: audioBlob };
-    showResult(voice.id, btn);
-  } catch (err) {
-    statusEl.textContent = "pick a voice";
-    toast(err.message);
-  } finally {
-    btn.classList.remove("busy");
-  }
+  if (!inflight[voice.id]) prefetch(voice); // modal voices (and failed retries) start here
 }
 
 function showResult(voiceId, btn) {
+  wanted = null;
   current = results[voiceId];
   document.querySelectorAll(".voice").forEach((b) => b.classList.remove("active"));
   btn.classList.add("active");
@@ -238,8 +278,11 @@ linkBtn.onclick = copyLink;
 
 againBtn.onclick = () => {
   take = null;
+  takeGen++; // in-flight conversions from the old take become no-ops
   current = null;
+  wanted = null;
   results = {};
+  failures = {};
   resultEl.classList.remove("visible");
   voicesEl.classList.remove("visible");
   statusEl.textContent = "tap to record (max 1:00)";
