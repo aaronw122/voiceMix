@@ -25,10 +25,10 @@ def test_elevenlabs_engine_posts_sts_and_returns_mp3(monkeypatch):
     assert seen["api_key"] == "test-key"
     # pin the English STS model — multilingual drifted accent/language in testing
     assert b"eleven_english_sts_v2" in seen["body"]
-    # quality params: 192kbps output, per-voice settings sent
+    # quality params: 192kbps output; deliberately NO voice_settings (A/B-tested
+    # worse than API defaults — see commit history)
     assert "output_format=mp3_44100_192" in seen["url"]
-    assert b"voice_settings" in seen["body"]
-    assert b"stability" in seen["body"]
+    assert b"voice_settings" not in seen["body"]
 
 
 def test_elevenlabs_engine_raises_on_api_error(monkeypatch):

@@ -1,5 +1,4 @@
 import asyncio
-import json
 import logging
 import os
 from typing import Protocol
@@ -7,7 +6,6 @@ from typing import Protocol
 import httpx
 
 from . import audio
-from .voices import voice_settings_for
 
 logger = logging.getLogger(__name__)
 
@@ -44,12 +42,9 @@ class ElevenLabsEngine:
             headers={"xi-api-key": os.environ.get("ELEVENLABS_API_KEY", "")},
             files={"audio": ("input.wav", wav, "audio/wav")},
             # remove_background_noise: STS needs clean single-speaker input — room noise
-            # renders as gibberish (verified via STT round-trip on real recordings)
-            data={
-                "model_id": ELEVENLABS_MODEL,
-                "remove_background_noise": "true",
-                "voice_settings": json.dumps(voice_settings_for(voice_id)),
-            },
+            # renders as gibberish (verified via STT round-trip on real recordings).
+            # NO voice_settings: A/B-tested worse than API defaults on real takes.
+            data={"model_id": ELEVENLABS_MODEL, "remove_background_noise": "true"},
         )
         if resp.status_code != 200:
             # body stays server-side: EngineError messages flow into client-facing 502s
