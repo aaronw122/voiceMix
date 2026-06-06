@@ -40,3 +40,45 @@ def test_convert_happy_path(client, app):
     audio_resp = client.get(body["audioUrl"].replace("http://testserver", ""))
     assert audio_resp.status_code == 200
     assert audio_resp.content == FAKE_MP3
+
+
+def test_unknown_voice_404(client):
+    resp = post_convert(client, voice_id="not-a-voice")
+    assert resp.status_code == 404
+    assert "error" in resp.json()
+
+
+def test_modal_voice_on_convert_422(client):
+    resp = post_convert(client, voice_id="jfk")
+    assert resp.status_code == 422
+    assert "impersonate" in resp.json()["error"]
+
+
+def test_oversize_upload_413(client):
+    resp = post_convert(client, audio_bytes=b"\x00" * (10 * 1024 * 1024 + 1))
+    assert resp.status_code == 413
+
+
+def test_garbage_audio_422(client):
+    resp = post_convert(client, audio_bytes=b"definitely not audio")
+    assert resp.status_code == 422
+    assert resp.json()["error"] == "Couldn't read that recording"
+
+
+def test_too_long_recording_422(client):
+    resp = post_convert(client, audio_bytes=make_wav(seconds=61))
+    assert resp.status_code == 422
+    assert "1 minute" in resp.json()["error"]
+
+
+def test_engine_failure_502(client, app):
+    from app.engines import EngineError
+
+    class ExplodingEngine:
+        async def transform(self, wav, voice_id, text=None):
+            raise EngineError("upstream sad")
+
+    app.state.engines["elevenlabs"] = ExplodingEngine()
+    resp = post_convert(client)
+    assert resp.status_code == 502
+    assert "error" in resp.json()
