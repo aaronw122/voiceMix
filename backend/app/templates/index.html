@@ -19,6 +19,8 @@
     @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(224,36,94,.5); }
                        50% { box-shadow: 0 0 0 18px rgba(224,36,94,0); } }
     #status { margin-top: 0.9rem; color: var(--dim); font-size: 0.85rem; min-height: 1.2em; }
+    #mic-select { margin-top: 0.5rem; max-width: 90%; background: var(--card); color: var(--dim);
+                  border: 1px solid var(--line); border-radius: 0.5rem; padding: 0.3rem 0.5rem; font-size: 0.8rem; }
 
     #voices { margin-top: 1.6rem; display: none; flex-wrap: wrap; gap: 0.55rem; justify-content: center; }
     #voices.visible { display: flex; }
@@ -47,6 +49,7 @@
     <h1>VOICEMIX</h1>
     <button id="record-btn" title="record">🎙️</button>
     <div id="status">tap to record (max 1:00)</div>
+    <select id="mic-select" title="microphone"><option value="">default microphone</option></select>
     <div id="voices"></div>
     <section id="result">
       <audio id="player" controls></audio>

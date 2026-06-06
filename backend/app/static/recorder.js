@@ -3,6 +3,7 @@ const MAX_SECONDS = 60;
 
 const recordBtn = document.getElementById("record-btn");
 const statusEl = document.getElementById("status");
+const micSelect = document.getElementById("mic-select");
 const voicesEl = document.getElementById("voices");
 const resultEl = document.getElementById("result");
 const player = document.getElementById("player");
@@ -36,6 +37,61 @@ function pickMime() {
   return ""; // let the browser choose
 }
 
+async function getMicStream() {
+  const audio = {
+    noiseSuppression: true,
+    echoCancellation: true,
+    autoGainControl: true,
+    voiceIsolation: true, // best-effort: ignored where unsupported
+  };
+  const savedId = localStorage.getItem("micId");
+  if (savedId) audio.deviceId = { exact: savedId };
+  let s;
+  try {
+    s = await navigator.mediaDevices.getUserMedia({ audio });
+  } catch (err) {
+    if (savedId && err.name === "OverconstrainedError") {
+      localStorage.removeItem("micId"); // saved mic unplugged — fall back to default
+      delete audio.deviceId;
+      s = await navigator.mediaDevices.getUserMedia({ audio });
+    } else {
+      throw err;
+    }
+  }
+  showActiveMic(s);
+  refreshMicList(); // labels are only available after a grant
+  return s;
+}
+
+function showActiveMic(s) {
+  const label = s.getAudioTracks()[0]?.label;
+  if (label) micSelect.title = `recording with: ${label}`;
+}
+
+async function refreshMicList() {
+  const devices = await navigator.mediaDevices.enumerateDevices();
+  const mics = devices.filter((d) => d.kind === "audioinput" && d.deviceId !== "default");
+  if (!mics.length) return;
+  const savedId = localStorage.getItem("micId");
+  const activeLabel = stream?.getAudioTracks()[0]?.label;
+  micSelect.innerHTML = "";
+  for (const m of mics) {
+    const opt = document.createElement("option");
+    opt.value = m.deviceId;
+    opt.textContent = `🎤 ${m.label || "microphone"}`;
+    if (savedId ? m.deviceId === savedId : m.label === activeLabel) opt.selected = true;
+    micSelect.appendChild(opt);
+  }
+}
+
+micSelect.onchange = () => {
+  localStorage.setItem("micId", micSelect.value);
+  if (stream) {
+    stream.getTracks().forEach((t) => t.stop()); // release old device; next take uses the new one
+    stream = null;
+  }
+};
+
 async function loadVoices() {
   const resp = await fetch("/voices");
   voices = await resp.json();
@@ -56,9 +112,7 @@ async function startRecording() {
   statusEl.textContent = "getting mic ready…"; // honest state: capture has NOT begun yet
   try {
     if (!stream || !stream.active) {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: { noiseSuppression: true, echoCancellation: true, autoGainControl: true },
-      });
+      stream = await getMicStream();
     }
   } catch {
     starting = false;
@@ -181,3 +235,4 @@ againBtn.onclick = () => {
 };
 
 loadVoices().catch(() => toast("couldn't load voices — is the backend up?"));
+refreshMicList().catch(() => {}); // shows labels if mic permission was already granted
