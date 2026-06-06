@@ -27,8 +27,13 @@
     .voice { padding: 0.7rem 1rem; border: 1px solid var(--line); border-radius: 0.7rem; cursor: pointer;
              background: var(--card); color: var(--text); font-size: 0.95rem; transition: border-color .15s; }
     .voice:hover { border-color: var(--accent); }
-    .voice.busy { opacity: 0.6; pointer-events: none; }
+    .voice.busy { animation: cooking 1.2s ease-in-out infinite; }
+    .voice.busy::after { content: " ⏳"; }
+    .voice.ready::after { content: " ✓"; color: #4caf50; }
+    .voice.failed { border-color: #a33; }
+    .voice.failed::after { content: " ⚠️"; }
     .voice.active { border-color: var(--accent); }
+    @keyframes cooking { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
 
     #result { margin-top: 1.6rem; display: none; }
     #result.visible { display: block; }
