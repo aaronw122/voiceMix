@@ -14,12 +14,13 @@ def make_wav(seconds: float = 0.5, rate: int = 8000) -> bytes:
     return buf.getvalue()
 
 
-def test_normalize_produces_16k_mono_wav():
+def test_normalize_produces_48k_mono_wav():
+    # 48kHz full-band, not 16k: STS needs the consonant detail above 8kHz
     from app.audio import normalize_to_wav
 
     out = normalize_to_wav(make_wav())
     with wave.open(io.BytesIO(out), "rb") as w:
-        assert w.getframerate() == 16000
+        assert w.getframerate() == 48000
         assert w.getnchannels() == 1
 
 

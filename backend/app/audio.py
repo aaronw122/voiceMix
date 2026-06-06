@@ -16,8 +16,11 @@ def _run(cmd: list[str]) -> subprocess.CompletedProcess:
 
 
 def normalize_to_wav(data: bytes) -> bytes:
-    """Any browser/iMessage recording (webm/m4a/wav) -> WAV 16kHz mono.
+    """Any browser/iMessage recording (webm/m4a/wav) -> WAV 48kHz mono.
 
+    48kHz, NOT 16kHz: STS reconstructs phonemes from spectral detail above 8kHz
+    (consonants) — 16k input made it hallucinate words (verified A/B on real takes).
+    Whisper-based engines resample internally, so full band costs them nothing.
     Uses temp files, not pipes: mp4/m4a needs seekable input (moov atom).
     """
     with tempfile.NamedTemporaryFile(suffix=".bin") as src, tempfile.NamedTemporaryFile(
@@ -25,7 +28,7 @@ def normalize_to_wav(data: bytes) -> bytes:
     ) as dst:
         src.write(data)
         src.flush()
-        _run(["ffmpeg", "-y", "-i", src.name, "-ar", "16000", "-ac", "1", "-f", "wav", dst.name])
+        _run(["ffmpeg", "-y", "-i", src.name, "-ar", "48000", "-ac", "1", "-f", "wav", dst.name])
         return Path(dst.name).read_bytes()
 
 
