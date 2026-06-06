@@ -4,5 +4,12 @@ __pycache__/
 .venv/
 venv/
 .env
+.env.*
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
+tests/
+scripts/
+data/
+smoke_output.mp3
+README.md
