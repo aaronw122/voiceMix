@@ -18,6 +18,13 @@ VOICES = [
         "elevenVoiceId": "EXAVITQu4vr4xnSDxMaL",  # Sarah
     },
     {
+        "id": "femme-fatale",
+        "name": "Femme Fatale",
+        "engine": "elevenlabs",
+        "acceptsText": False,
+        "elevenVoiceId": "eVItLK1UvXctxuaRV2Oq",  # Jean — library voice added to account
+    },
+    {
         "id": "jfk",
         "name": "JFK",
         "engine": "modal",
