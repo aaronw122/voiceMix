@@ -170,11 +170,12 @@ split into parallel tracks.
 
 **john — voice pipeline :** 
 
-- **generic voices (path A):** source clean, single-speaker recordings per accent/age/gender → ElevenLabs **IVC** (instant, found audio OK). One clean sample per voice, not hours.
 - **celebrity / impression voices (path B):** spike the **open-source ASR→TTS** route on Modal — Whisper → **CosyVoice2 or GPT-SoVITS**. Clone ONE celebrity early (hr 1–2), confirm quality clears the demo bar **and** measure real cold/warm latency before committing. Fall back to IVC celebrity (lower fidelity, sender's delivery) if it doesn't clear the bar.
 - once voices land, help german with the thread.
 
 **german**
+
+- **generic voices (path A):** source clean, single-speaker recordings per accent/age/gender → ElevenLabs **IVC** (instant, found audio OK). One clean sample per voice, not hours.
 - steel thread E2E:** record → backend → STS → playback → share, end to end, on **stock ElevenLabs voices** so it has zero dependency on john's jobs. Thread goes green long before custom voices exist.
 
 **aaron**
