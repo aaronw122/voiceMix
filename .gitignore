@@ -8,6 +8,7 @@ conversations/
 # backend
 backend/data/
 backend/.env
+backend/smoke_output.mp3
 __pycache__/
 .venv/
 *.pyc
