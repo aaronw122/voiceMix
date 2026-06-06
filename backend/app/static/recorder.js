@@ -162,8 +162,12 @@ shareBtn.onclick = async () => {
       /* user cancelled the share sheet */
     }
   } else {
-    await navigator.clipboard.writeText(current.url);
-    toast("link copied");
+    try {
+      await navigator.clipboard.writeText(current.url);
+      toast("link copied");
+    } catch {
+      toast(current.url); // clipboard blocked (focus/permission) — at least show the link
+    }
   }
 };
 
