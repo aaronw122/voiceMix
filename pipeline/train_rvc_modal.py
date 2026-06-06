@@ -17,11 +17,11 @@ RUNBOOK
         modal volume put rvc-vol \
           data/raw/Barack_Obama_describes_his_experience_writing_A_Promised_Land.wav /datasets/obama/
   3. train (builds the image first run — ~10-15 min — then trains):
-        modal run train_rvc_modal.py --epochs 50
+        modal run train_rvc_modal.py::main --epochs 50
      train several voices in parallel and wait for results:
-        modal run train_rvc_modal.py --model-names obama,jobs,attenborough,rogan,freeman --epochs 50
+        modal run train_rvc_modal.py::main --model-names obama,jobs,attenborough,rogan,freeman --epochs 50
      submit several voices in the background:
-        modal run --detach train_rvc_modal.py --model-names obama,jobs,attenborough,rogan,freeman --epochs 50 --background
+        modal run --detach train_rvc_modal.py::main --model-names obama,jobs,attenborough,rogan,freeman --epochs 50 --background
   4. grab the artifact pair:
         modal volume get rvc-vol /artifacts/obama/obama.pth ./
         modal volume get rvc-vol /artifacts/obama/added_*.index ./
