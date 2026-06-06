@@ -1,8 +1,11 @@
 import asyncio
 import os
 import uuid
+from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 
 from . import db, storage
 from .audio import AudioDecodeError, duration_seconds, normalize_to_wav
@@ -10,6 +13,7 @@ from .engines import EngineError
 from .voices import get_voice, list_voices
 
 router = APIRouter()
+templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 MAX_BYTES = 10 * 1024 * 1024  # 10 MB
 MAX_SECONDS = 60.0
@@ -95,3 +99,15 @@ async def convert(
         raise HTTPException(502, f"Voice engine failed: {e}")
 
     return _persist(mp3, voice["name"])
+
+
+@router.get("/share/{clip_id}", response_class=HTMLResponse)
+async def share(request: Request, clip_id: str):
+    clip = db.get_clip(clip_id)
+    if clip is None:
+        raise HTTPException(404, "Clip not found")
+    return templates.TemplateResponse(
+        request,
+        "share.html",
+        {"title": clip["title"], "audio_url": storage.url_for(clip["object_key"])},
+    )

@@ -17,5 +17,7 @@ def save(data: bytes) -> str:
 
 
 def url_for(key: str) -> str:
+    if "/" in key or "\\" in key or ".." in key:
+        raise ValueError(f"Invalid storage key: {key!r}")
     base = os.environ.get("BASE_URL", "http://localhost:8000").rstrip("/")
     return f"{base}/audio/{key}.mp3"
