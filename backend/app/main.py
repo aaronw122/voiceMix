@@ -31,6 +31,7 @@ def create_app() -> FastAPI:
     app.mount("/audio", StaticFiles(directory=storage.audio_dir()), name="audio")
 
     @app.get("/healthz")
+    @app.get("/health")  # alias: deploy pipeline (Dockerfile HEALTHCHECK + CI gate) probes /health
     async def healthz():
         return {"ok": True}
 
