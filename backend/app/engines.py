@@ -117,6 +117,10 @@ class RvcModalEngine:
     def __init__(self, client: httpx.AsyncClient | None = None, base_url: str | None = None):
         self._base = (base_url or os.environ.get("MODAL_ENDPOINT_URL", "")).rstrip("/")
         self._client = client or httpx.AsyncClient(timeout=120.0)  # cold starts run 15-45s
+        # the Modal app processes inputs SERIALLY (measured) — queue on our side so
+        # each request's timeout covers only its own processing, not the line ahead
+        # of it. Bump MODAL_CONCURRENCY when John enables @modal.concurrent.
+        self._slots = asyncio.Semaphore(int(os.environ.get("MODAL_CONCURRENCY", "1")))
 
     async def aclose(self) -> None:
         await self._client.aclose()
@@ -126,12 +130,17 @@ class RvcModalEngine:
             raise EngineError("this voice needs a recording, not text")
         if await asyncio.to_thread(audio.duration_seconds, wav) > RVC_MAX_SECONDS:
             raise EngineError("recordings for this voice are capped at 30 seconds")
-        resp = await self._client.post(
-            f"{self._base}/convert",
-            params={"voice": voice_id, "index_rate": 0.5, "pitch": 0},
-            content=wav,  # raw WAV body — John's endpoint is not multipart
-            headers={"Content-Type": "audio/wav"},
-        )
+        async with self._slots:
+            try:
+                resp = await self._client.post(
+                    f"{self._base}/convert",
+                    params={"voice": voice_id, "index_rate": 0.5, "pitch": 0},
+                    content=wav,  # raw WAV body — John's endpoint is not multipart
+                    headers={"Content-Type": "audio/wav"},
+                )
+            except httpx.HTTPError as e:
+                logger.warning("RVC modal network error: %r", e)
+                raise EngineError("voice engine timed out — try that voice again")
         if resp.status_code != 200:
             logger.warning("RVC modal %s: %s", resp.status_code, resp.text[:300])
             raise EngineError(f"RVC engine returned {resp.status_code}")
