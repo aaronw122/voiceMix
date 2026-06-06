@@ -21,6 +21,7 @@ def app(tmp_path, monkeypatch):
     monkeypatch.setenv("AUDIO_DIR", str(tmp_path / "audio"))
     monkeypatch.setenv("DB_PATH", str(tmp_path / "voicemix.db"))
     monkeypatch.setenv("BASE_URL", "http://testserver")
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "test-key-not-real")
     from app.main import create_app
 
     return create_app()
