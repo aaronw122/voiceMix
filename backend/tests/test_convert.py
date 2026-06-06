@@ -57,6 +57,7 @@ def test_modal_voice_on_convert_422(client):
 def test_oversize_upload_413(client):
     resp = post_convert(client, audio_bytes=b"\x00" * (10 * 1024 * 1024 + 1))
     assert resp.status_code == 413
+    assert "error" in resp.json()
 
 
 def test_garbage_audio_422(client):
