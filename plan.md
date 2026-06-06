@@ -22,10 +22,21 @@ record (native) ──> backend ──> ffmpeg ──> ElevenLabs STS ──> MP
 
 ## The contract (lock this in hour 1 — it lets us parallelize)
 
-`POST /convert`
+**Two convert endpoints, same response shape** — frontend/iMessage treat them interchangeably and pick by which voice the user chose. (Endpoint names are a suggestion; lock in hour 1.)
+
+Each voice in the picker catalog carries an **`engine`** field (`"elevenlabs"` → `/convert`, `"modal"` → `/impersonate`) so the client routes to the right endpoint automatically. The picker also flags which voices accept **text input** (path B only).
+
+`POST /convert` — **speech-to-speech** (path A: generic voices via ElevenLabs)
 - **in:** `audio` (any browser-native recording — webm/m4a/wav, ≤1 min, ≤10 MB), `voiceId`
 - **out:** `{ url, title, audioUrl }`
-- audio bytes live in object storage; the client fetches them via a **presigned URL** (the `audioUrl` in the response). The `audioUrl` is **minted fresh on every request** — we persist only the durable **object key**, never the expiring presigned URL (see Metadata note below).
+- Genuinely STS — needs your audio; keeps the **sender's** delivery, swaps timbre. This is the steel thread.
+
+`POST /impersonate` — **ASR→TTS** (path B: celebrity/impression voices via Whisper + CosyVoice2/GPT-SoVITS on Modal)
+- **in:** `voiceId` + **EITHER** `audio` (transcribed server-side via Whisper, same ≤1 min / ≤10 MB caps) **OR** `text` (skip transcription).
+- **out:** `{ url, title, audioUrl }`
+- **Not forced to be STS:** internally it transcribes to text then synthesizes, so it accepts text directly. Audio input keeps the unified "record" UX; text input is a free option (no Whisper step → no transcription errors, lower latency). Regenerates the words in the **target's** full delivery (accent + cadence); the sender's own delivery is discarded.
+
+**Both endpoints:** audio bytes live in object storage; the client fetches them via a **presigned URL** (the `audioUrl` in the response). The `audioUrl` is **minted fresh on every request** — we persist only the durable **object key**, never the expiring presigned URL (see Metadata note below).
 
 `GET /share/:id` → page with title + audio player.
 
@@ -104,7 +115,21 @@ No single upload format — formats the browser records in differ depending on w
 └────────────────────────┘     └──────────────────────────────┘     └─────────────────────────┘
 ```
 
-The server only ever returns **JSON metadata** (steps 7–8); the actual audio **bytes** travel client ↔ object storage directly (steps 9–10). ElevenLabs is the sole external dependency.
+The server only ever returns **JSON metadata** (steps 7–8); the actual audio **bytes** travel client ↔ object storage directly (steps 9–10). ElevenLabs is the sole external dependency for the steel thread (path A below); the optional celebrity path adds Modal — see Voice engines.
+
+## Voice engines (two paths, one `/convert` contract)
+
+**Two endpoints** — `POST /convert` (STS) and `POST /impersonate` (ASR→TTS) — **same JSON response**, so frontend/iMessage pick by the chosen voice and don't care which engine ran. Split endpoints also keep the orthogonality clean: german owns `/convert` (ElevenLabs), john owns `/impersonate` (Modal).
+
+**A. Generic voices (accents, ages, genders) — ElevenLabs. The reliable spine.** Stock voices + **Instant Voice Cloning (IVC)** on found single-speaker recordings (no identity gate — found audio is fine for non-famous voices). Speech-to-speech: keeps the *sender's* delivery, swaps timbre. Zero infra — this is the steel thread.
+
+**B. Celebrity / impression voices (JFK, etc.) — open-source ASR→TTS on Modal. john's investigation track.** Whisper (ASR) → **CosyVoice2** *or* **GPT-SoVITS** (few-shot TTS) on Modal (serverless GPU, scales to zero). Regenerates the words in the target's *full* delivery — accent + cadence, not just timbre. The only route to convincing dead-celebrity voices.
+
+**Why not ElevenLabs PVC for celebrities?** PVC is **identity-locked**: it requires a live voice-match captcha — you record yourself reading a prompt, and it's compared against the uploaded samples to confirm same speaker. You can't produce a live JFK, so found audio can't pass. PVC only works for a voice you can record on demand (i.e. one of us). **This kills the earlier "~6h PVC cloning" critical path:** generic voices are instant IVC, celebrities go open-source — no 6h job blocks us.
+
+**Two behaviors, on purpose:** path A keeps your delivery (you, old-man-voiced); path B regenerates in the celebrity's delivery (JFK reads your text). Same UI, slightly different feel — fine, just know it going in.
+
+**Latency (path B, Modal):** ~4–8s warm for a short clip (Whisper ~1s + TTS ~3–5s); cold start 15–45s → use `keep_warm` for the demo. The async loading state already covers this. CosyVoice2 streaming (~150ms first packet) is the lever if perceived latency bites.
 
 ## Scope & limitations
 
@@ -119,8 +144,8 @@ The server only ever returns **JSON metadata** (steps 7–8); the actual audio *
 
 | Phase                       | ~Time              | Goal                                                                                                                                                                   | Owner(s)     |
 | --------------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| **0 — Align + launch jobs** | 0–1h               | Lock the contract. Group-pick the ~12 candidate voice types. **john fires the first cloning jobs immediately** (~6h turnaround — the critical path).                   | all          |
-| **1 — Voice pipeline**      | 0h start → ~6h lan | Source single-speaker data, fire cloning jobs in hour 0, tune params; hand voices over as they finish.                                                                 | john         |
+| **0 — Align + launch jobs** | 0–1h               | Lock the contract. Group-pick the ~12 candidate voice types. **john starts generic IVC clones + fires the path-B open-source spike on Modal** (clone one celebrity, gut-check quality + latency).                   | all          |
+| **1 — Voice pipeline**      | 0h start → ongoing | Generic: source clean single-speaker data → IVC. Celebrity: spike open-source ASR→TTS on Modal (CosyVoice2/GPT-SoVITS), confirm quality+latency; hand voices over as they land. | john         |
 | **1 — Steel thread**        | 1–2h               | hardcode 1 stock voice: record → backend → STS → play back one clip. **DoD: one round-trip works.** Then backend is finalized + pushed, and they split into web + iOS. | german/aaron |
 | **2 — Backend + storage**   | 2–4h               | Real `/convert`, validation (≤1 min / ≤10 MB), Postgres store for clips, MinIO presigned URLs, `/share/:id` page.                                                      | german       |
 | **2 — Web frontend**        | 3–6h               | Recorder UI, voice picker, playback, share page, **Share** button (file-first).                                                                                        | john/german  |
@@ -145,10 +170,9 @@ split into parallel tracks.
 
 **john — voice pipeline :** 
 
-- gather single-speaker source data per candidate
-- principles on
-- fire off the cloning/training jobs immediately. can take up to 6 hours to return. 
-- once finishes, help german with 
+- **generic voices (path A):** source clean, single-speaker recordings per accent/age/gender → ElevenLabs **IVC** (instant, found audio OK). One clean sample per voice, not hours.
+- **celebrity / impression voices (path B):** spike the **open-source ASR→TTS** route on Modal — Whisper → **CosyVoice2 or GPT-SoVITS**. Clone ONE celebrity early (hr 1–2), confirm quality clears the demo bar **and** measure real cold/warm latency before committing. Fall back to IVC celebrity (lower fidelity, sender's delivery) if it doesn't clear the bar.
+- once voices land, help german with the thread.
 
 **german**
 - steel thread E2E:** record → backend → STS → playback → share, end to end, on **stock ElevenLabs voices** so it has zero dependency on john's jobs. Thread goes green long before custom voices exist.
@@ -186,7 +210,8 @@ prep for our winning speeches.
 - [x] Answer the multi-speaker spike question. → No; one clean speaker per voice (see Open Questions).
 - [x] **Pick store + hosting** → Postgres + MinIO, self-hosted on Hetzner via Docker Compose (see Tech stack).
 - [x] Pick web stack → React (Vite + TS); backend FastAPI (tentative, German to confirm).
-- [ ] **Confirm the critical path:** john fires the first cloning jobs in hour 0 (~6h turnaround).
+- [ ] **john: open-source celebrity-voice spike** — Whisper + **CosyVoice2 or GPT-SoVITS** on Modal; clone one celebrity early (hr 1–2), confirm quality clears the demo bar **and** measure cold/warm latency before committing (see Voice engines). Fall back to IVC celebrity if it doesn't.
+- [ ] **Confirm the critical path:** generic voices = instant IVC (no 6h job); celebrity path-B is parallel + gated by the spike, so it can't sink the thread.
 - [ ] Define "demo done" — what we show at hour 10.
 
 ## Appendix
