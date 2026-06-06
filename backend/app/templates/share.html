@@ -5,19 +5,50 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>{{ title }}</title>
   <meta property="og:title" content="{{ title }}" />
+  <meta property="og:description" content="Made with voiceMix — goofy voice messages" />
   <meta property="og:type" content="music.song" />
+  <meta property="og:url" content="{{ page_url }}" />
   <meta property="og:audio" content="{{ audio_url }}" />
+  <meta property="og:image" content="{{ image_url }}" />
+  <meta name="twitter:card" content="summary_large_image" />
   <style>
     body { font-family: -apple-system, sans-serif; display: grid; place-items: center;
            min-height: 100vh; margin: 0; background: #111; color: #eee; }
     main { text-align: center; padding: 2rem; }
     audio { margin-top: 1.5rem; width: min(90vw, 24rem); }
+    .row { display: flex; gap: 0.6rem; justify-content: center; margin-top: 1.2rem; }
+    .btn { padding: 0.6rem 1.2rem; border-radius: 0.7rem; border: 1px solid #3a3a3a;
+           background: #1d1d1d; color: #eee; cursor: pointer; font-size: 0.9rem;
+           text-decoration: none; display: inline-block; }
+    #toast { position: fixed; bottom: 1.4rem; left: 50%; transform: translateX(-50%);
+             background: #1d1d1d; border: 1px solid #3a3a3a; border-radius: 0.7rem;
+             padding: 0.7rem 1.1rem; font-size: 0.9rem; opacity: 0; transition: opacity .25s;
+             pointer-events: none; }
+    #toast.visible { opacity: 1; }
   </style>
 </head>
 <body>
   <main>
     <h1>{{ title }}</h1>
     <audio controls src="{{ audio_url }}"></audio>
+    <div class="row">
+      <button id="copy-btn" class="btn">Copy link</button>
+      <a class="btn" href="{{ audio_url }}" download="voicemix.mp3">Download</a>
+    </div>
   </main>
+  <div id="toast"></div>
+  <script>
+    document.getElementById("copy-btn").onclick = async () => {
+      const toast = document.getElementById("toast");
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        toast.textContent = "link copied";
+      } catch {
+        toast.textContent = window.location.href;
+      }
+      toast.classList.add("visible");
+      setTimeout(() => toast.classList.remove("visible"), 2600);
+    };
+  </script>
 </body>
 </html>

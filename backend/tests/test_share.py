@@ -12,6 +12,12 @@ def test_share_page_renders(client, app):
     assert f"/audio/{key}.mp3" in html
     assert "<audio" in html
     assert 'property="og:title"' in html
+    # rich-preview + re-share affordances for links shared on the web
+    assert 'property="og:image"' in html
+    assert "/static/share-card.png" in html
+    assert 'property="og:url"' in html
+    assert 'id="copy-btn"' in html
+    assert "download=" in html
 
 
 def test_share_unknown_id_404(client):
