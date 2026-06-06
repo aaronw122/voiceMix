@@ -1,17 +1,21 @@
+# elevenVoiceId values are current ElevenLabs premade voices (per the elevenlabs/skills
+# recommended list — the older Adam/Rachel legacy IDs are missing from newer accounts).
+# Stock voices are placeholders until John's IVC clones land; scripts/smoke.py verifies
+# the IDs against the real account.
 VOICES = [
     {
         "id": "old-man",
         "name": "Old Man",
         "engine": "elevenlabs",
         "acceptsText": False,
-        "elevenVoiceId": "pNInz6obpgDQGcFmaJgB",
+        "elevenVoiceId": "JBFqnCBsd6RMkjVDRZzb",  # George — warm older male (placeholder)
     },
     {
         "id": "young-woman",
         "name": "Young Woman",
         "engine": "elevenlabs",
         "acceptsText": False,
-        "elevenVoiceId": "21m00Tcm4TlvDq8ikWAM",
+        "elevenVoiceId": "EXAVITQu4vr4xnSDxMaL",  # Sarah
     },
     {
         "id": "jfk",

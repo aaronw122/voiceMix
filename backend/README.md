@@ -27,6 +27,17 @@ Replace `StubModalEngine` in `app/engines.py` with a class implementing:
 `wav`/`text` is non-None; return MP3 bytes. Raise `EngineError` on failure → the
 route returns a clean 502. Nothing else needs to change.
 
+## ElevenLabs integration notes
+
+Follows the conventions from the `elevenlabs/skills` agents skill (`.agents/skills/agents/`):
+`ELEVENLABS_API_KEY` env var, `xi-api-key` header, `https://api.elevenlabs.io/v1` base, and
+current premade voice IDs (George/Sarah — the legacy Adam/Rachel IDs are missing from newer
+accounts). We deliberately call the REST API via httpx instead of the `elevenlabs` Python SDK:
+the engine seam is two HTTP calls, and `MockTransport` tests verify the actual wire format
+(URL, header, multipart). Swap to the SDK inside `ElevenLabsEngine` if it ever grows. The
+skill's Agents-Platform features (conversational agents, workflows, guardrails, widgets) are
+N/A — this service is a one-shot speech-to-speech pipeline, not a voice agent.
+
 ## Known fast-follows (deliberately not in this PR)
 
 - **CORS is not wired** — the web frontend's first cross-origin call will fail until
