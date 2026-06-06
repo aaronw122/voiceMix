@@ -26,3 +26,10 @@ Replace `StubModalEngine` in `app/engines.py` with a class implementing:
 `voice_id` is the catalog id from `app/voices.py` (e.g. "jfk"); exactly one of
 `wav`/`text` is non-None; return MP3 bytes. Raise `EngineError` on failure → the
 route returns a clean 502. Nothing else needs to change.
+
+## Known fast-follows (deliberately not in this PR)
+
+- **CORS is not wired** — the web frontend's first cross-origin call will fail until
+  `CORSMiddleware` is added in `app/main.py` (one line; permissive is fine for the demo).
+- `/share/<unknown-id>` returns the JSON error shape, not an HTML 404 page.
+- `og:image` is absent from the share page, so iMessage link previews are plain.
