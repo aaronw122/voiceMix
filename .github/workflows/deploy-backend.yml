@@ -62,7 +62,7 @@ jobs:
           host: ${{ secrets.HETZNER_HOST }}
           username: ${{ secrets.HETZNER_USER }}
           key: ${{ secrets.HETZNER_SSH_KEY }}
-          source: "deploy/docker-compose.yml,deploy/Caddyfile,deploy/.env.example"
+          source: "deploy/docker-compose.yml,deploy/.env.example"
           target: "~/voicemix"
           strip_components: 1
 
@@ -78,8 +78,11 @@ jobs:
             # Deploy the exact image this commit built (pinned, not mutable :latest) — enables rollback.
             export BACKEND_IMAGE_TAG="sha-${{ github.sha }}"
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
-            docker compose pull
-            docker compose up -d
+            # Scope to backend only — never touch cloudflared (edge infra, brought up
+            # once at bootstrap) or a future frontend container. --no-deps keeps this
+            # deploy from reconciling other services in the compose file.
+            docker compose pull backend
+            docker compose up -d --no-deps backend
             # Post-deploy health gate: fail the deploy if the backend doesn't come up healthy.
             ok=""
             for i in $(seq 1 15); do

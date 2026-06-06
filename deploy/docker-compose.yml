@@ -1,12 +1,22 @@
 # Backend server stack — runs on the Hetzner box.
 # The box PULLS the prebuilt image (built+pushed by CI); it never compiles.
 # Storage is on-disk: audio clips + SQLite metadata live on the `clipdata` volume.
-# No MinIO, no Postgres. Frontend deploys separately.
+# No MinIO, no Postgres. Frontend deploys separately (its own image + pipeline).
+#
+# Public access is via a Cloudflare Tunnel — cloudflared makes an OUTBOUND
+# connection to Cloudflare and traffic flows back down it. The box opens NO
+# public ports (no 80/443); TLS terminates at Cloudflare's edge. Ingress routes
+# (api.voicemix.awill.co -> backend:8000) are configured in the Cloudflare
+# dashboard for the token's tunnel — not here.
 #
 # One-time on the box:
 #   mkdir -p ~/voicemix && cd ~/voicemix
 #   cp .env.example .env   # fill in real secrets once (CI ships .env.example, leaves .env)
 #   docker login ghcr.io   # CI also logs in during deploy
+#   docker compose up -d   # brings up backend + cloudflared (the edge tunnel)
+#
+# Per-deploy, CI scopes to its own service (`up -d --no-deps backend`), so a
+# backend deploy never touches cloudflared or a future frontend container.
 
 services:
   backend:
@@ -16,24 +26,20 @@ services:
     volumes:
       - clipdata:/data            # MP3 clips + SQLite db (DATA_DIR=/data)
     ports:
-      - "127.0.0.1:8000:8000"     # local-only: health checks + SSH-tunnel debugging
+      - "127.0.0.1:8000:8000"     # local-only: CI health gate + SSH-tunnel debugging
 
-  caddy:
-    image: caddy:2-alpine
+  # Edge tunnel — remotely-managed (dashboard) tunnel selected by CF_TUNNEL_TOKEN.
+  # Reaches backend over the compose network as http://backend:8000.
+  # Add a frontend route in the dashboard (-> http://frontend:80) once that
+  # container exists; no change needed here.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
     restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CF_TUNNEL_TOKEN}
     depends_on:
       - backend
-    ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      API_DOMAIN: ${API_DOMAIN}
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddydata:/data
-      - caddyconfig:/config
 
 volumes:
   clipdata:
-  caddydata:
-  caddyconfig:

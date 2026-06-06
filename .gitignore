@@ -1,1 +1,6 @@
 conversations/
+
+# Secrets — real env files live on the box, never in git. Keep .env.example tracked.
+.env
+.env.*
+!.env.example
