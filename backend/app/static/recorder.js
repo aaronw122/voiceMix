@@ -12,6 +12,7 @@ const toastEl = document.getElementById("toast");
 
 let voices = [];
 let mediaRecorder = null;
+let stream = null; // kept warm between takes — mic spin-up (1-3s on bluetooth) eats the head of recordings
 let starting = false; // re-entry guard: taps during the getUserMedia gap must not spawn a 2nd recorder
 let take = null; // {blob, ext} — the current recording
 let results = {}; // voiceId -> {url, audioUrl, blob} (cache per take)
@@ -52,9 +53,11 @@ async function loadVoices() {
 async function startRecording() {
   if (starting) return; // a start is already in flight
   starting = true;
-  let stream;
+  statusEl.textContent = "getting mic ready…"; // honest state: capture has NOT begun yet
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    if (!stream || !stream.active) {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    }
   } catch {
     starting = false;
     statusEl.textContent = "voiceMix needs your mic — check the address-bar permission";
@@ -65,7 +68,7 @@ async function startRecording() {
   mediaRecorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
   mediaRecorder.ondataavailable = (e) => e.data.size && chunks.push(e.data);
   mediaRecorder.onstop = () => {
-    stream.getTracks().forEach((t) => t.stop());
+    // stream stays warm for the next take (released on pagehide)
     const type = mediaRecorder.mimeType || "audio/webm";
     recordBtn.classList.remove("recording");
     recordBtn.textContent = "🎙️";
@@ -87,12 +90,18 @@ async function startRecording() {
   voicesEl.classList.remove("visible");
 
   const startedAt = Date.now();
+  statusEl.textContent = "🔴 speak now! (tap to stop)";
   timerId = setInterval(() => {
     const s = Math.floor((Date.now() - startedAt) / 1000);
-    statusEl.textContent = `recording… 0:${String(s).padStart(2, "0")} (tap to stop)`;
+    statusEl.textContent = `🔴 recording 0:${String(s).padStart(2, "0")} (tap to stop)`;
   }, 250);
   autoStopId = setTimeout(stopRecording, MAX_SECONDS * 1000);
 }
+
+// release the warm mic when leaving the page
+window.addEventListener("pagehide", () => {
+  if (stream) stream.getTracks().forEach((t) => t.stop());
+});
 
 function stopRecording() {
   clearInterval(timerId);

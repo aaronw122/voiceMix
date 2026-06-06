@@ -33,6 +33,12 @@ async def _read_and_normalize(upload: UploadFile) -> bytes:
         raise HTTPException(422, "Couldn't read that recording")
     if await asyncio.to_thread(duration_seconds, wav) > MAX_SECONDS:
         raise HTTPException(422, "Recording is over the 1 minute limit")
+    if os.environ.get("DEBUG_SAVE_INPUTS") == "1":  # bisect aid: inspect exactly what engines receive
+        debug_dir = Path(os.environ.get("AUDIO_DIR", "data/audio")).parent / "debug-inputs"
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        stem = uuid.uuid4().hex[:8]
+        (debug_dir / f"{stem}.raw.bin").write_bytes(data)  # exactly what the browser uploaded
+        (debug_dir / f"{stem}.wav").write_bytes(wav)  # after ffmpeg normalize
     return wav
 
 
