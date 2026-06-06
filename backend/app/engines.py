@@ -53,6 +53,56 @@ class ElevenLabsEngine:
         return resp.content
 
 
+ELEVENLABS_STT_URL = "https://api.elevenlabs.io/v1/speech-to-text"
+ELEVENLABS_TTS_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+ELEVENLABS_STT_MODEL = "scribe_v1"
+ELEVENLABS_TTS_MODEL = "eleven_multilingual_v2"
+
+
+class ElevenLabsSttTtsEngine:
+    """Transcribe-then-synthesize: scribe STT -> TTS in the target voice.
+
+    vs STS: output is always cleanly articulated (TTS reads the transcript), but
+    the SENDER's delivery/emotion is replaced by the voice's own. Chosen because
+    STS warbled on real-world recordings while scribe transcribed them flawlessly.
+    Also accepts text directly (skips the STT hop).
+    """
+
+    def __init__(self, client: httpx.AsyncClient | None = None):
+        self._client = client or httpx.AsyncClient(timeout=60.0)
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
+
+    async def _transcribe(self, wav: bytes) -> str:
+        resp = await self._client.post(
+            ELEVENLABS_STT_URL,
+            headers={"xi-api-key": os.environ.get("ELEVENLABS_API_KEY", "")},
+            files={"file": ("input.wav", wav, "audio/wav")},
+            data={"model_id": ELEVENLABS_STT_MODEL},
+        )
+        if resp.status_code != 200:
+            logger.warning("ElevenLabs STT %s: %s", resp.status_code, resp.text[:300])
+            raise EngineError(f"ElevenLabs STT returned {resp.status_code}")
+        return (resp.json().get("text") or "").strip()
+
+    async def transform(self, wav: bytes | None, voice_id: str, text: str | None) -> bytes:
+        if text is None:
+            text = await self._transcribe(wav)
+        if not text:
+            raise EngineError("couldn't hear any words in that recording")
+        resp = await self._client.post(
+            ELEVENLABS_TTS_URL.format(voice_id=voice_id),
+            params={"output_format": "mp3_44100_192"},
+            headers={"xi-api-key": os.environ.get("ELEVENLABS_API_KEY", "")},
+            json={"text": text, "model_id": ELEVENLABS_TTS_MODEL},
+        )
+        if resp.status_code != 200:
+            logger.warning("ElevenLabs TTS %s: %s", resp.status_code, resp.text[:300])
+            raise EngineError(f"ElevenLabs TTS returned {resp.status_code}")
+        return resp.content
+
+
 class StubModalEngine:
     """Path B placeholder. John: replace this class with the Whisper+TTS Modal client —
     same signature, nothing else in the app changes."""

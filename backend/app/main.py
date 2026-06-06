@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import db, storage
-from .engines import ElevenLabsEngine, StubModalEngine
+from .engines import ElevenLabsEngine, ElevenLabsSttTtsEngine, StubModalEngine
 from .routes import router
 
 logger = logging.getLogger(__name__)
@@ -32,8 +32,11 @@ def create_app() -> FastAPI:
         # keyless dev/demo-fallback mode: every voice runs the stub (passthrough audio)
         app.state.engines = {"elevenlabs": StubModalEngine(), "modal": StubModalEngine()}
     else:
+        # stt-tts (default): always-articulate output, loses sender's delivery.
+        # ELEVENLABS_MODE=sts: keeps delivery but warbles on unclear input.
+        sts_mode = os.environ.get("ELEVENLABS_MODE") == "sts"
         app.state.engines = {
-            "elevenlabs": ElevenLabsEngine(),
+            "elevenlabs": ElevenLabsEngine() if sts_mode else ElevenLabsSttTtsEngine(),
             "modal": StubModalEngine(),
         }
     app.include_router(router)

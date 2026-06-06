@@ -43,6 +43,69 @@ def test_elevenlabs_engine_raises_on_api_error(monkeypatch):
         asyncio.run(engine.transform(b"WAVBYTES", "voice", None))
 
 
+def _stt_tts_transport(seen, stt_response=None, tts_status=200):
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        if "speech-to-text" in url:
+            seen["stt_body"] = request.read()
+            return stt_response or httpx.Response(200, json={"text": "hello there"})
+        seen["tts_url"] = url
+        seen["tts_json"] = request.read()
+        return httpx.Response(tts_status, content=b"MP3_FROM_TTS")
+
+    return httpx.MockTransport(handler)
+
+
+def test_stt_tts_engine_transcribes_then_synthesizes(monkeypatch):
+    from app.engines import ElevenLabsSttTtsEngine
+
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "test-key")
+    seen = {}
+    engine = ElevenLabsSttTtsEngine(client=httpx.AsyncClient(transport=_stt_tts_transport(seen)))
+    out = asyncio.run(engine.transform(b"WAVBYTES", "pqHfZKP75CvOlQylNhV4", None))
+
+    assert out == b"MP3_FROM_TTS"
+    assert b"scribe_v1" in seen["stt_body"]
+    assert "text-to-speech/pqHfZKP75CvOlQylNhV4" in seen["tts_url"]
+    assert "output_format=mp3_44100_192" in seen["tts_url"]
+    assert b"hello there" in seen["tts_json"]  # the transcript is what gets spoken
+
+
+def test_stt_tts_engine_text_input_skips_stt(monkeypatch):
+    from app.engines import ElevenLabsSttTtsEngine
+
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "test-key")
+    seen = {}
+    engine = ElevenLabsSttTtsEngine(client=httpx.AsyncClient(transport=_stt_tts_transport(seen)))
+    out = asyncio.run(engine.transform(None, "voice", "typed words"))
+
+    assert out == b"MP3_FROM_TTS"
+    assert "stt_body" not in seen  # STT hop skipped entirely
+    assert b"typed words" in seen["tts_json"]
+
+
+def test_stt_tts_engine_empty_transcript_raises(monkeypatch):
+    from app.engines import ElevenLabsSttTtsEngine, EngineError
+
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "test-key")
+    seen = {}
+    transport = _stt_tts_transport(seen, stt_response=httpx.Response(200, json={"text": "  "}))
+    engine = ElevenLabsSttTtsEngine(client=httpx.AsyncClient(transport=transport))
+    with pytest.raises(EngineError):
+        asyncio.run(engine.transform(b"WAVBYTES", "voice", None))
+
+
+def test_stt_tts_engine_tts_error_raises(monkeypatch):
+    from app.engines import ElevenLabsSttTtsEngine, EngineError
+
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "test-key")
+    engine = ElevenLabsSttTtsEngine(
+        client=httpx.AsyncClient(transport=_stt_tts_transport({}, tts_status=429))
+    )
+    with pytest.raises(EngineError):
+        asyncio.run(engine.transform(b"WAVBYTES", "voice", None))
+
+
 def test_stub_modal_engine_transcodes_audio():
     import io
     import wave
