@@ -13,6 +13,10 @@ const VISUALS: Record<string, VoiceVisual> = {
   "young-woman": { c1: "#f857a6", c2: "#9b5cf6", mono: "Y", tag: "Bright · clear · youthful" },
   "femme-fatale": { c1: "#ff6a88", c2: "#b5179e", mono: "F", tag: "Sultry · smoky · bold" },
   jfk: { c1: "#36d1dc", c2: "#5b86e5", mono: "J", tag: "Resonant · oratorical" },
+  trump: { c1: "#f5af19", c2: "#f12711", mono: "T", tag: "Brash · emphatic · unmistakable" },
+  obama: { c1: "#4286f4", c2: "#1b3358", mono: "B", tag: "Measured · warm · deliberate" },
+  mlk: { c1: "#c94b4b", c2: "#4b134f", mono: "M", tag: "Soaring · resonant · prophetic" },
+  queen_elizabeth: { c1: "#834d9b", c2: "#d04ed6", mono: "Q", tag: "Regal · crisp · composed" },
 };
 
 const FALLBACK: VoiceVisual = { c1: "#8e9eab", c2: "#5b86e5", mono: "?", tag: "Custom voice" };
