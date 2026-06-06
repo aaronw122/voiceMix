@@ -1,11 +1,12 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from . import storage
+from . import db, storage
 from .routes import router
 
 
 def create_app() -> FastAPI:
+    db.init_db()
     app = FastAPI(title="voiceMix")
     app.include_router(router)
     app.mount("/audio", StaticFiles(directory=storage.audio_dir()), name="audio")
