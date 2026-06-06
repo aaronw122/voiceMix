@@ -4,3 +4,10 @@ conversations/
 .env
 .env.*
 !.env.example
+
+# backend
+backend/data/
+backend/.env
+__pycache__/
+.venv/
+*.pyc
