@@ -41,6 +41,26 @@ def test_impersonate_requires_exactly_one_input(client):
     assert resp.status_code == 422
 
 
+def test_empty_text_field_counts_as_absent(client):
+    # browser forms submit empty fields as "" — neither input provided
+    resp = client.post("/impersonate", data={"voiceId": "jfk", "text": ""})
+    assert resp.status_code == 422
+    assert "exactly one" in resp.json()["error"]
+
+
+def test_impersonate_engine_failure_502(client, app):
+    from app.engines import EngineError
+
+    class ExplodingEngine:
+        async def transform(self, wav, voice_id, text=None):
+            raise EngineError("upstream sad")
+
+    app.state.engines["modal"] = ExplodingEngine()
+    resp = client.post("/impersonate", data={"voiceId": "jfk", "text": "ask not"})
+    assert resp.status_code == 502
+    assert "error" in resp.json()
+
+
 def test_elevenlabs_voice_on_impersonate_422(client):
     resp = client.post("/impersonate", data={"voiceId": "old-man", "text": "hi"})
     assert resp.status_code == 422

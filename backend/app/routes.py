@@ -56,6 +56,7 @@ async def impersonate(
     audio: UploadFile | None = File(None),
     text: str | None = Form(None),
 ):
+    text = text or None  # browser forms send empty fields as "" — treat as absent
     voice = get_voice(voiceId)
     if voice is None:
         raise HTTPException(404, f"Unknown voice: {voiceId}")
