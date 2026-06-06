@@ -58,6 +58,13 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    # Stack-level lock: only one deploy job — across BOTH the backend and frontend
+    # pipelines — may mutate ~/voicemix on the box at a time. Prevents two jobs
+    # racing to scp the same compose file / run docker concurrently. Builds stay
+    # parallel (this group is on the deploy job only).
+    concurrency:
+      group: voicemix-box-deploy
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
 
@@ -80,8 +87,17 @@ jobs:
           script: |
             set -e
             cd ~/voicemix
-            # Deploy the exact image this commit built (pinned, not mutable :latest) — enables rollback.
-            export BACKEND_IMAGE_TAG="sha-${{ github.sha }}"
+            # Deploy the exact image this commit built (pinned, not mutable :latest).
+            # Persist the tag into the box .env so a manual `docker compose up` after a
+            # reboot uses this SHA instead of drifting back to :latest. Rollback = edit
+            # this line. (.env is the box-local file; CI only ships .env.example.)
+            TAG="sha-${{ github.sha }}"
+            if grep -q '^BACKEND_IMAGE_TAG=' .env 2>/dev/null; then
+              sed -i "s|^BACKEND_IMAGE_TAG=.*|BACKEND_IMAGE_TAG=${TAG}|" .env
+            else
+              echo "BACKEND_IMAGE_TAG=${TAG}" >> .env
+            fi
+            export BACKEND_IMAGE_TAG="${TAG}"
             echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
             # Scope to backend only — never touch cloudflared (edge infra, brought up
             # once at bootstrap) or a future frontend container. --no-deps keeps this
