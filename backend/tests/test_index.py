@@ -5,6 +5,7 @@ def test_index_renders_recorder_page(client):
     html = resp.text
     assert 'id="record-btn"' in html
     assert 'id="mic-select"' in html
+    assert 'id="link-btn"' in html
     assert "/static/recorder.js" in html
 
 

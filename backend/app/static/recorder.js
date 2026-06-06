@@ -8,6 +8,7 @@ const voicesEl = document.getElementById("voices");
 const resultEl = document.getElementById("result");
 const player = document.getElementById("player");
 const shareBtn = document.getElementById("share-btn");
+const linkBtn = document.getElementById("link-btn");
 const againBtn = document.getElementById("again-btn");
 const toastEl = document.getElementById("toast");
 
@@ -219,14 +220,21 @@ shareBtn.onclick = async () => {
       /* user cancelled the share sheet */
     }
   } else {
-    try {
-      await navigator.clipboard.writeText(current.url);
-      toast("link copied");
-    } catch {
-      toast(current.url); // clipboard blocked (focus/permission) — at least show the link
-    }
+    await copyLink();
   }
 };
+
+async function copyLink() {
+  if (!current) return;
+  try {
+    await navigator.clipboard.writeText(current.url);
+    toast("link copied");
+  } catch {
+    toast(current.url); // clipboard blocked (focus/permission) — at least show the link
+  }
+}
+
+linkBtn.onclick = copyLink;
 
 againBtn.onclick = () => {
   take = null;
