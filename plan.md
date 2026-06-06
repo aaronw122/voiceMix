@@ -1,7 +1,9 @@
 # voiceMix — 10-Hour Build Plan
 
 **Team:** Aaron, German, John 
+
 **time:** 10 hours, end-to-end 
+
 **Philosophy:** steel thread first, good-enough software, decouple so three people move in parallel.
 
 ## What we're building
