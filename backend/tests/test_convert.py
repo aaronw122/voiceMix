@@ -51,6 +51,19 @@ def test_convert_happy_path(client, app):
     assert audio_resp.content == FAKE_MP3
 
 
+def test_urls_derive_from_request_when_base_url_unset(app, monkeypatch):
+    # no BASE_URL -> URLs use the request origin, so any host/port works
+    # without configuration (hardcoded localhost produced dead links repeatedly)
+    from fastapi.testclient import TestClient
+
+    monkeypatch.delenv("BASE_URL", raising=False)
+    app.state.engines["elevenlabs"] = FakeEngine()
+    with TestClient(app, base_url="http://some-other-host:9999") as client:
+        body = post_convert(client).json()
+    assert body["url"].startswith("http://some-other-host:9999/share/")
+    assert body["audioUrl"].startswith("http://some-other-host:9999/audio/")
+
+
 def test_unknown_voice_404(client):
     resp = post_convert(client, voice_id="not-a-voice")
     assert resp.status_code == 404

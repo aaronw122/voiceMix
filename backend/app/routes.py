@@ -19,8 +19,11 @@ MAX_BYTES = 10 * 1024 * 1024  # 10 MB
 MAX_SECONDS = 60.0
 
 
-def _base_url() -> str:
-    return os.environ.get("BASE_URL", "http://localhost:8000").rstrip("/")
+def _base_url(request: Request) -> str:
+    # explicit BASE_URL wins (prod sets the public Cloudflare origin); otherwise
+    # derive from the request so any host/port works without configuration —
+    # the hardcoded localhost default produced dead links three separate times
+    return (os.environ.get("BASE_URL") or str(request.base_url)).rstrip("/")
 
 
 async def _read_and_normalize(upload: UploadFile) -> bytes:
@@ -42,15 +45,16 @@ async def _read_and_normalize(upload: UploadFile) -> bytes:
     return wav
 
 
-def _persist(mp3: bytes, voice_name: str) -> dict:
+def _persist(mp3: bytes, voice_name: str, request: Request) -> dict:
     key = storage.save(mp3)
     clip_id = uuid.uuid4().hex[:10]
     title = f"{voice_name} — voiceMix clip"
     db.insert_clip(clip_id, title, key)
+    base = _base_url(request)
     return {
-        "url": f"{_base_url()}/share/{clip_id}",
+        "url": f"{base}/share/{clip_id}",
         "title": title,
-        "audioUrl": storage.url_for(key),
+        "audioUrl": storage.url_for(key, base),
     }
 
 
@@ -82,7 +86,7 @@ async def impersonate(
     except EngineError as e:
         raise HTTPException(502, f"Voice engine failed: {e}")
 
-    return _persist(mp3, voice["name"])
+    return _persist(mp3, voice["name"], request)
 
 
 @router.post("/convert")
@@ -104,7 +108,7 @@ async def convert(
     except EngineError as e:
         raise HTTPException(502, f"Voice engine failed: {e}")
 
-    return _persist(mp3, voice["name"])
+    return _persist(mp3, voice["name"], request)
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -120,5 +124,5 @@ async def share(request: Request, clip_id: str):
     return templates.TemplateResponse(
         request,
         "share.html",
-        {"title": clip["title"], "audio_url": storage.url_for(clip["object_key"])},
+        {"title": clip["title"], "audio_url": storage.url_for(clip["object_key"], _base_url(request))},
     )
