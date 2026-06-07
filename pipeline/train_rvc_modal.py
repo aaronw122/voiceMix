@@ -62,6 +62,7 @@ image = (
         "cd /Applio && python core.py prerequisites "
         "--models True --pretraineds_hifigan True --exe False"
     )
+    .pip_install("fastapi[standard]")
 )
 
 app = modal.App("rvc-train")
@@ -256,7 +257,39 @@ def main(
 #        modal run train_rvc_modal.py::infer_main --source-name <name>.wav
 #   3. download + play:
 #        modal volume get rvc-vol /outputs/<name>__as_<model>.wav ./
-INFER_GPU = os.environ.get("MODAL_INFER_GPU", "L4")  # inference is light; H100 would be waste
+INFER_GPU = os.environ.get("MODAL_INFER_GPU", "H100")
+DEMO_MIN_CONTAINERS = int(os.environ.get("MODAL_DEMO_MIN_CONTAINERS", "1"))
+DEMO_BUFFER_CONTAINERS = int(os.environ.get("MODAL_DEMO_BUFFER_CONTAINERS", "0"))
+DEMO_SCALEDOWN_WINDOW = int(os.environ.get("MODAL_DEMO_SCALEDOWN_WINDOW", "1200"))
+MAX_INPUT_SECONDS = 30.0
+MAX_INPUT_BYTES = 25 * 1024 * 1024
+DEMO_VOICES = {
+    "trump": {
+        "label": "Donald Trump",
+        "checkpoint": "trump_250e_8500s.pth",
+        "index": "trump.index",
+    },
+    "jfk": {
+        "label": "JFK",
+        "checkpoint": "jfk_250e_8250s.pth",
+        "index": "jfk.index",
+    },
+    "mlk": {
+        "label": "MLK",
+        "checkpoint": "mlk_250e_7250s.pth",
+        "index": "mlk.index",
+    },
+    "queen_elizabeth": {
+        "label": "Queen Elizabeth II",
+        "checkpoint": "queen_elizabeth_250e_5500s.pth",
+        "index": "queen_elizabeth.index",
+    },
+    "obama": {
+        "label": "Obama",
+        "checkpoint": "obama_250e_9500s.pth",
+        "index": "obama.index",
+    },
+}
 
 
 @app.function(image=image, gpu=INFER_GPU, volumes={"/vol": vol}, timeout=600)
@@ -308,3 +341,135 @@ def infer_main(model_name: str = DEFAULT_MODEL_NAME, source_name: str = "source.
     r = infer.remote(model_name, source_name, index_rate, pitch, f0_method, checkpoint)
     print("\nDONE:", r)
     print(f"download + listen:\n  modal volume get rvc-vol /outputs/{r['output']} ./")
+
+
+def _audio_duration_seconds(path: Path) -> float:
+    result = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(path),
+        ],
+        cwd=APPLIO,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    return float(result.stdout.strip())
+
+
+@app.function(
+    image=image,
+    gpu=INFER_GPU,
+    volumes={"/vol": vol},
+    timeout=600,
+    min_containers=DEMO_MIN_CONTAINERS,
+    buffer_containers=DEMO_BUFFER_CONTAINERS,
+    scaledown_window=DEMO_SCALEDOWN_WINDOW,
+)
+@modal.asgi_app()
+def demo_api():
+    from fastapi import FastAPI, HTTPException, Query, Request
+    from fastapi.responses import Response
+
+    web_app = FastAPI(title="VoiceMix RVC Demo API")
+
+    @web_app.get("/voices")
+    async def voices():
+        return {
+            "max_input_seconds": MAX_INPUT_SECONDS,
+            "output_format": "wav",
+            "voices": DEMO_VOICES,
+        }
+
+    @web_app.post("/convert")
+    async def convert(
+        request: Request,
+        voice: str = Query(...),
+        index_rate: float = Query(0.5, ge=0.0, le=1.0),
+        pitch: int = Query(0, ge=-24, le=24),
+    ):
+        if voice not in DEMO_VOICES:
+            raise HTTPException(status_code=400, detail=f"unknown voice: {voice}")
+
+        body = await request.body()
+        if not body:
+            raise HTTPException(status_code=400, detail="empty request body")
+        if len(body) > MAX_INPUT_BYTES:
+            raise HTTPException(status_code=413, detail="input audio is too large")
+
+        _ensure_applio_config()
+        request_id = os.urandom(6).hex()
+        work_dir = Path("/tmp") / f"rvc_demo_{request_id}"
+        work_dir.mkdir(parents=True, exist_ok=True)
+
+        raw = work_dir / "input"
+        wav = work_dir / "input.wav"
+        out = work_dir / f"{voice}.wav"
+        raw.write_bytes(body)
+
+        try:
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-hide_banner",
+                    "-loglevel",
+                    "error",
+                    "-y",
+                    "-i",
+                    str(raw),
+                    "-ac",
+                    "1",
+                    "-ar",
+                    "48000",
+                    "-acodec",
+                    "pcm_s16le",
+                    str(wav),
+                ],
+                cwd=APPLIO,
+                check=True,
+            )
+            duration = _audio_duration_seconds(wav)
+            if duration > MAX_INPUT_SECONDS:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"input audio is {duration:.1f}s; max is {MAX_INPUT_SECONDS:.0f}s",
+                )
+
+            voice_info = DEMO_VOICES[voice]
+            art = Path("/vol") / "artifacts" / voice
+            pth = art / voice_info["checkpoint"]
+            index = art / voice_info["index"]
+            if not pth.exists():
+                raise HTTPException(status_code=500, detail=f"missing model: {pth}")
+            if not index.exists():
+                raise HTTPException(status_code=500, detail=f"missing index: {index}")
+
+            _run(
+                f"python core.py infer --input_path {wav} --output_path {out} "
+                f"--pth_path {pth} --index_path {index} "
+                f"--f0_method rmvpe --index_rate {index_rate} --pitch {pitch} --export_format WAV"
+            )
+            return Response(
+                content=out.read_bytes(),
+                media_type="audio/wav",
+                headers={
+                    "Content-Disposition": f'inline; filename="{voice}_{request_id}.wav"',
+                    "X-Voice": voice,
+                    "X-Voice-Checkpoint": voice_info["checkpoint"],
+                    "X-Input-Duration-Seconds": f"{duration:.3f}",
+                },
+            )
+        except HTTPException:
+            raise
+        except subprocess.CalledProcessError as exc:
+            raise HTTPException(status_code=500, detail=f"audio conversion failed: {exc}") from exc
+        finally:
+            shutil.rmtree(work_dir, ignore_errors=True)
+
+    return web_app
