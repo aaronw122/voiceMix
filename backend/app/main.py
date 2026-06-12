@@ -10,7 +10,13 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from . import db, storage
-from .engines import ElevenLabsEngine, ElevenLabsSttTtsEngine, RvcModalEngine, StubModalEngine
+from .engines import (
+    ElevenLabsEngine,
+    ElevenLabsSttTtsEngine,
+    GptSoVitsModalEngine,
+    RvcModalEngine,
+    StubModalEngine,
+)
 from .routes import router
 
 logger = logging.getLogger(__name__)
@@ -31,15 +37,24 @@ def create_app() -> FastAPI:
     app = FastAPI(title="voiceMix", lifespan=_lifespan)
     if os.environ.get("FAKE_ENGINES") == "1":
         # keyless dev/demo-fallback mode: every voice runs the stub (passthrough audio)
-        app.state.engines = {"elevenlabs": StubModalEngine(), "modal": StubModalEngine()}
+        app.state.engines = {
+            "elevenlabs": StubModalEngine(),
+            "modal": StubModalEngine(),
+            "tts_modal": StubModalEngine(),
+        }
     else:
         # stt-tts (default): always-articulate output, loses sender's delivery.
         # ELEVENLABS_MODE=sts: keeps delivery but warbles on unclear input.
         sts_mode = os.environ.get("ELEVENLABS_MODE") == "sts"
         app.state.engines = {
             "elevenlabs": ElevenLabsEngine() if sts_mode else ElevenLabsSttTtsEngine(),
-            # John's RVC models when his Modal endpoint is configured; stub otherwise
+            # self-hosted RVC models (timbre swap) when the Modal endpoint is configured
             "modal": RvcModalEngine() if os.environ.get("MODAL_ENDPOINT_URL") else StubModalEngine(),
+            # fine-tuned GPT-SoVITS ASR->TTS (currently trump); separate endpoint so RVC
+            # stays the safe fallback for every other voice until each clears the quality gate
+            "tts_modal": (
+                GptSoVitsModalEngine() if os.environ.get("TTS_MODAL_ENDPOINT_URL") else StubModalEngine()
+            ),
         }
     # The React SPA is served from a different origin (voicemix.awill.co) than the
     # API (voiceapi.awill.co) — ported from the placeholder backend Aaron wired for it.

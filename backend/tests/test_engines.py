@@ -194,3 +194,60 @@ def test_stub_modal_engine_handles_text_only():
 
     out = asyncio.run(StubModalEngine().transform(None, "jfk", "ask not"))
     assert len(out) > 0
+
+
+def test_gptsovits_engine_text_skips_audio_body():
+    from app.engines import GptSoVitsModalEngine
+
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        seen["body"] = request.read()
+        return httpx.Response(200, content=b"MP3_FROM_TTS")
+
+    engine = GptSoVitsModalEngine(
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        base_url="http://tts.test",
+    )
+    out = asyncio.run(engine.transform(None, "trump", "make america"))
+
+    assert out == b"MP3_FROM_TTS"  # Modal returns MP3 directly — no re-encode
+    assert "/synthesize" in seen["url"]
+    assert "voice=trump" in seen["url"] and "text=make+america" in seen["url"]
+    assert seen["body"] == b""  # text path sends no audio
+
+
+def test_gptsovits_engine_audio_posts_raw_wav():
+    from app.engines import GptSoVitsModalEngine
+
+    seen = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen["url"] = str(request.url)
+        seen["ctype"] = request.headers.get("content-type")
+        seen["body"] = request.read()
+        return httpx.Response(200, content=b"MP3_FROM_TTS")
+
+    engine = GptSoVitsModalEngine(
+        client=httpx.AsyncClient(transport=httpx.MockTransport(handler)),
+        base_url="http://tts.test",
+    )
+    out = asyncio.run(engine.transform(b"WAVBYTES", "trump", None))
+
+    assert out == b"MP3_FROM_TTS"
+    assert seen["ctype"] == "audio/wav"
+    assert seen["body"] == b"WAVBYTES"  # raw body, not multipart
+
+
+def test_gptsovits_engine_raises_on_error_status():
+    from app.engines import EngineError, GptSoVitsModalEngine
+
+    engine = GptSoVitsModalEngine(
+        client=httpx.AsyncClient(
+            transport=httpx.MockTransport(lambda r: httpx.Response(500, text="boom"))
+        ),
+        base_url="http://tts.test",
+    )
+    with pytest.raises(EngineError):
+        asyncio.run(engine.transform(None, "trump", "hi"))
