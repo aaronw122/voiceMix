@@ -28,6 +28,40 @@ def test_impersonate_with_text(client, app):
     assert fake.last_call == {"wav": None, "voice_id": "jfk", "text": "ask not"}
 
 
+def test_trump_routes_to_tts_engine(client, app):
+    # per-voice migration: trump (modalEngine="tts") must hit the GPT-SoVITS endpoint,
+    # not the RVC "modal" engine that the other celebrity voices still use.
+    rvc = FakeEngine(b"RVC")
+    tts = FakeEngine(b"TTS")
+    app.state.engines["modal"] = rvc
+    app.state.engines["tts_modal"] = tts
+
+    resp = client.post(
+        "/impersonate",
+        files={"audio": ("rec.wav", make_wav(), "audio/wav")},
+        data={"voiceId": "trump"},
+    )
+    assert resp.status_code == 200
+    assert tts.last_call is not None and tts.last_call["voice_id"] == "trump"
+    assert rvc.last_call is None  # trump must not touch the RVC engine
+
+
+def test_jfk_still_routes_to_rvc_engine(client, app):
+    rvc = FakeEngine(b"RVC")
+    tts = FakeEngine(b"TTS")
+    app.state.engines["modal"] = rvc
+    app.state.engines["tts_modal"] = tts
+
+    resp = client.post(
+        "/impersonate",
+        files={"audio": ("rec.wav", make_wav(), "audio/wav")},
+        data={"voiceId": "jfk"},
+    )
+    assert resp.status_code == 200
+    assert rvc.last_call is not None and rvc.last_call["voice_id"] == "jfk"
+    assert tts.last_call is None
+
+
 def test_impersonate_requires_exactly_one_input(client):
     # neither
     resp = client.post("/impersonate", data={"voiceId": "jfk"})
