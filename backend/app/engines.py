@@ -147,6 +147,47 @@ class RvcModalEngine:
         return await asyncio.to_thread(audio.wav_to_mp3, resp.content)
 
 
+class GptSoVitsModalEngine:
+    """Our self-hosted fine-tuned GPT-SoVITS v2ProPlus voice on Modal (ASR->TTS).
+
+    Unlike RVC (timbre swap, keeps the sender's delivery), this regenerates the words
+    in the target's FULL delivery — accent + cadence — which is the point of the
+    migration. Accepts a recording (Modal runs Whisper then TTS) OR text (skips Whisper).
+    Contract: POST /synthesize?voice=<id> with a raw WAV body or ?text=; returns MP3.
+    """
+
+    def __init__(self, client: httpx.AsyncClient | None = None, base_url: str | None = None):
+        self._base = (base_url or os.environ.get("TTS_MODAL_ENDPOINT_URL", "")).rstrip("/")
+        self._client = client or httpx.AsyncClient(timeout=120.0)  # cold starts run 20-60s
+        self._slots = asyncio.Semaphore(int(os.environ.get("TTS_MODAL_CONCURRENCY", "1")))
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
+
+    async def transform(self, wav: bytes | None, voice_id: str, text: str | None) -> bytes:
+        async with self._slots:
+            try:
+                if text is not None:
+                    resp = await self._client.post(
+                        f"{self._base}/synthesize",
+                        params={"voice": voice_id, "text": text},
+                    )
+                else:
+                    resp = await self._client.post(
+                        f"{self._base}/synthesize",
+                        params={"voice": voice_id},
+                        content=wav,
+                        headers={"Content-Type": "audio/wav"},
+                    )
+            except httpx.HTTPError as e:
+                logger.warning("GPT-SoVITS modal network error: %r", e)
+                raise EngineError("voice engine timed out — try that voice again")
+        if resp.status_code != 200:
+            logger.warning("GPT-SoVITS modal %s: %s", resp.status_code, resp.text[:300])
+            raise EngineError(f"TTS engine returned {resp.status_code}")
+        return resp.content  # Modal already returns MP3
+
+
 class StubModalEngine:
     """Keyless fallback when MODAL_ENDPOINT_URL is unset (passthrough audio)."""
 
