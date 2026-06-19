@@ -69,7 +69,9 @@ image = (
     .env({"HF_HOME": "/vol/models/f5/hf", "PYTHONPATH": F5_DIR})
 )
 
-app = modal.App("voicemix-tts-dwarkesh")    # OWN app — does NOT touch the Trump F5 endpoint
+# App name (= public URL) comes from the env, never hardcoded: keeps the unauthenticated
+# endpoint off the public repo. Deploy with `DWARKESH_APP_NAME=<secret> modal deploy ...`.
+app = modal.App(os.environ.get("DWARKESH_APP_NAME", "voicemix-dwarkesh-dev"))
 vol = modal.Volume.from_name("tts-vol", create_if_missing=False)
 
 
