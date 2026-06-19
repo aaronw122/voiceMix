@@ -41,6 +41,7 @@ def create_app() -> FastAPI:
             "elevenlabs": StubModalEngine(),
             "modal": StubModalEngine(),
             "tts_modal": StubModalEngine(),
+            "tts_dwarkesh": StubModalEngine(),
         }
     else:
         # stt-tts (default): always-articulate output, loses sender's delivery.
@@ -54,6 +55,12 @@ def create_app() -> FastAPI:
             # stays the safe fallback for every other voice until each clears the quality gate
             "tts_modal": (
                 GptSoVitsModalEngine() if os.environ.get("TTS_MODAL_ENDPOINT_URL") else StubModalEngine()
+            ),
+            # fine-tuned F5-TTS dwarkesh — its OWN Modal container/URL (separate from trump's),
+            # so deploys never cross-affect. Same HTTP contract, so the same engine class works.
+            "tts_dwarkesh": (
+                GptSoVitsModalEngine(base_url=os.environ.get("DWARKESH_TTS_MODAL_ENDPOINT_URL", ""))
+                if os.environ.get("DWARKESH_TTS_MODAL_ENDPOINT_URL") else StubModalEngine()
             ),
         }
     # The React SPA is served from a different origin (voicemix.awill.co) than the

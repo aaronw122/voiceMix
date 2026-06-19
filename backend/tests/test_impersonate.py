@@ -46,6 +46,27 @@ def test_trump_routes_to_tts_engine(client, app):
     assert rvc.last_call is None  # trump must not touch the RVC engine
 
 
+def test_dwarkesh_routes_to_tts_dwarkesh_engine(client, app):
+    # dwarkesh (modalEngine="tts_dwarkesh") must hit its OWN dedicated F5 container,
+    # not the shared trump endpoint ("tts_modal") and not the RVC fallback ("modal").
+    rvc = FakeEngine(b"RVC")
+    tts = FakeEngine(b"TTS")
+    dwarkesh = FakeEngine(b"DWARKESH")
+    app.state.engines["modal"] = rvc
+    app.state.engines["tts_modal"] = tts
+    app.state.engines["tts_dwarkesh"] = dwarkesh
+
+    resp = client.post(
+        "/impersonate",
+        files={"audio": ("rec.wav", make_wav(), "audio/wav")},
+        data={"voiceId": "dwarkesh"},
+    )
+    assert resp.status_code == 200
+    assert dwarkesh.last_call is not None and dwarkesh.last_call["voice_id"] == "dwarkesh"
+    assert tts.last_call is None  # dwarkesh must not touch trump's shared endpoint
+    assert rvc.last_call is None  # dwarkesh must not touch the RVC engine
+
+
 def test_jfk_still_routes_to_rvc_engine(client, app):
     rvc = FakeEngine(b"RVC")
     tts = FakeEngine(b"TTS")

@@ -32,6 +32,9 @@ VOICES = [
     # the tts engine already supports text, this flag only gates the frontend affordance.
     {"id": "jfk", "name": "JFK", "engine": "modal", "modalEngine": "rvc", "acceptsText": False, "elevenVoiceId": None},
     {"id": "trump", "name": "Trump", "engine": "modal", "modalEngine": "tts", "acceptsText": False, "elevenVoiceId": None},
+    # dwarkesh: fine-tuned F5-TTS on its OWN Modal container (modalEngine "tts_dwarkesh" -> the
+    # tts_dwarkesh engine). acceptsText gated False like trump until the typed-input UI is OK'd.
+    {"id": "dwarkesh", "name": "Dwarkesh", "engine": "modal", "modalEngine": "tts_dwarkesh", "acceptsText": False, "elevenVoiceId": None},
     {"id": "obama", "name": "Obama", "engine": "modal", "modalEngine": "rvc", "acceptsText": False, "elevenVoiceId": None},
     {"id": "mlk", "name": "MLK", "engine": "modal", "modalEngine": "rvc", "acceptsText": False, "elevenVoiceId": None},
     {"id": "queen_elizabeth", "name": "Queen Elizabeth", "engine": "modal", "modalEngine": "rvc", "acceptsText": False, "elevenVoiceId": None},
