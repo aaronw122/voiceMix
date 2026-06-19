@@ -4,36 +4,36 @@ from tests.test_convert import make_wav
 
 def test_impersonate_with_audio(client, app):
     fake = FakeEngine()
-    app.state.engines["modal"] = fake
+    app.state.engines["tts_modal"] = fake
 
     resp = client.post(
         "/impersonate",
         files={"audio": ("rec.wav", make_wav(), "audio/wav")},
-        data={"voiceId": "jfk"},
+        data={"voiceId": "trump"},
     )
     assert resp.status_code == 200
     body = resp.json()
     assert set(body.keys()) == {"url", "title", "audioUrl"}
-    assert body["title"] == "JFK — voiceMix clip"
+    assert body["title"] == "Trump — voiceMix clip"
     assert fake.last_call["wav"] is not None
     assert fake.last_call["text"] is None
 
 
 def test_impersonate_with_text(client, app):
     fake = FakeEngine()
-    app.state.engines["modal"] = fake
+    app.state.engines["tts_modal"] = fake
 
-    resp = client.post("/impersonate", data={"voiceId": "jfk", "text": "ask not"})
+    resp = client.post("/impersonate", data={"voiceId": "trump", "text": "make it great"})
     assert resp.status_code == 200
-    assert fake.last_call == {"wav": None, "voice_id": "jfk", "text": "ask not"}
+    assert fake.last_call == {"wav": None, "voice_id": "trump", "text": "make it great"}
 
 
 def test_trump_routes_to_tts_engine(client, app):
-    # per-voice migration: trump (modalEngine="tts") must hit the GPT-SoVITS endpoint,
-    # not the RVC "modal" engine that the other celebrity voices still use.
-    rvc = FakeEngine(b"RVC")
+    # trump (modalEngine="tts") must hit the shared fine-tuned endpoint ("tts_modal"),
+    # not the bare "modal" fallback.
+    fallback = FakeEngine(b"FALLBACK")
     tts = FakeEngine(b"TTS")
-    app.state.engines["modal"] = rvc
+    app.state.engines["modal"] = fallback
     app.state.engines["tts_modal"] = tts
 
     resp = client.post(
@@ -43,41 +43,46 @@ def test_trump_routes_to_tts_engine(client, app):
     )
     assert resp.status_code == 200
     assert tts.last_call is not None and tts.last_call["voice_id"] == "trump"
-    assert rvc.last_call is None  # trump must not touch the RVC engine
+    assert fallback.last_call is None  # trump must not touch the bare modal fallback
 
 
-def test_jfk_still_routes_to_rvc_engine(client, app):
-    rvc = FakeEngine(b"RVC")
+def test_dwarkesh_routes_to_tts_dwarkesh_engine(client, app):
+    # dwarkesh (modalEngine="tts_dwarkesh") must hit its OWN dedicated F5 container,
+    # not the shared trump endpoint ("tts_modal") and not the bare "modal" fallback.
+    fallback = FakeEngine(b"FALLBACK")
     tts = FakeEngine(b"TTS")
-    app.state.engines["modal"] = rvc
+    dwarkesh = FakeEngine(b"DWARKESH")
+    app.state.engines["modal"] = fallback
     app.state.engines["tts_modal"] = tts
+    app.state.engines["tts_dwarkesh"] = dwarkesh
 
     resp = client.post(
         "/impersonate",
         files={"audio": ("rec.wav", make_wav(), "audio/wav")},
-        data={"voiceId": "jfk"},
+        data={"voiceId": "dwarkesh"},
     )
     assert resp.status_code == 200
-    assert rvc.last_call is not None and rvc.last_call["voice_id"] == "jfk"
-    assert tts.last_call is None
+    assert dwarkesh.last_call is not None and dwarkesh.last_call["voice_id"] == "dwarkesh"
+    assert tts.last_call is None  # dwarkesh must not touch trump's shared endpoint
+    assert fallback.last_call is None  # dwarkesh must not touch the bare modal fallback
 
 
 def test_impersonate_requires_exactly_one_input(client):
     # neither
-    resp = client.post("/impersonate", data={"voiceId": "jfk"})
+    resp = client.post("/impersonate", data={"voiceId": "trump"})
     assert resp.status_code == 422
     # both
     resp = client.post(
         "/impersonate",
         files={"audio": ("rec.wav", make_wav(), "audio/wav")},
-        data={"voiceId": "jfk", "text": "ask not"},
+        data={"voiceId": "trump", "text": "make it great"},
     )
     assert resp.status_code == 422
 
 
 def test_empty_text_field_counts_as_absent(client):
     # browser forms submit empty fields as "" — neither input provided
-    resp = client.post("/impersonate", data={"voiceId": "jfk", "text": ""})
+    resp = client.post("/impersonate", data={"voiceId": "trump", "text": ""})
     assert resp.status_code == 422
     assert "exactly one" in resp.json()["error"]
 
@@ -89,8 +94,8 @@ def test_impersonate_engine_failure_502(client, app):
         async def transform(self, wav, voice_id, text=None):
             raise EngineError("upstream sad")
 
-    app.state.engines["modal"] = ExplodingEngine()
-    resp = client.post("/impersonate", data={"voiceId": "jfk", "text": "ask not"})
+    app.state.engines["tts_modal"] = ExplodingEngine()
+    resp = client.post("/impersonate", data={"voiceId": "trump", "text": "make it great"})
     assert resp.status_code == 502
     assert "error" in resp.json()
 

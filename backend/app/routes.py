@@ -80,9 +80,12 @@ async def impersonate(
         raise HTTPException(422, "Send exactly one of: audio, text")
 
     wav = await _read_and_normalize(audio) if audio is not None else None
-    # per-voice migration: "tts" voices hit the fine-tuned GPT-SoVITS endpoint, the rest
-    # stay on RVC. Both live behind /impersonate so the frontend contract is unchanged.
-    engine_key = "tts_modal" if voice.get("modalEngine") == "tts" else "modal"
+    # Map the voice's `modalEngine` tag to a key in app.state.engines. "tts" -> the shared
+    # fine-tuned trump endpoint; "tts_dwarkesh" -> the dedicated dwarkesh F5 container;
+    # anything else (or unset) -> RVC, the safe fallback. All live behind /impersonate so
+    # the frontend contract is unchanged.
+    engine_key = {"tts": "tts_modal", "tts_dwarkesh": "tts_dwarkesh"}.get(
+        voice.get("modalEngine"), "modal")
     engine = request.app.state.engines[engine_key]
     try:
         mp3 = await engine.transform(wav, voice["id"], text)

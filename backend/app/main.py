@@ -14,7 +14,6 @@ from .engines import (
     ElevenLabsEngine,
     ElevenLabsSttTtsEngine,
     GptSoVitsModalEngine,
-    RvcModalEngine,
     StubModalEngine,
 )
 from .routes import router
@@ -41,6 +40,7 @@ def create_app() -> FastAPI:
             "elevenlabs": StubModalEngine(),
             "modal": StubModalEngine(),
             "tts_modal": StubModalEngine(),
+            "tts_dwarkesh": StubModalEngine(),
         }
     else:
         # stt-tts (default): always-articulate output, loses sender's delivery.
@@ -48,12 +48,18 @@ def create_app() -> FastAPI:
         sts_mode = os.environ.get("ELEVENLABS_MODE") == "sts"
         app.state.engines = {
             "elevenlabs": ElevenLabsEngine() if sts_mode else ElevenLabsSttTtsEngine(),
-            # self-hosted RVC models (timbre swap) when the Modal endpoint is configured
-            "modal": RvcModalEngine() if os.environ.get("MODAL_ENDPOINT_URL") else StubModalEngine(),
-            # fine-tuned GPT-SoVITS ASR->TTS (currently trump); separate endpoint so RVC
-            # stays the safe fallback for every other voice until each clears the quality gate
+            # default fallback for any modal voice without a recognized modalEngine (none today);
+            # passthrough stub so an unknown/misconfigured voice degrades gracefully, never 500s
+            "modal": StubModalEngine(),
+            # fine-tuned GPT-SoVITS/F5 ASR->TTS (trump); its own endpoint, stub fallback when unset
             "tts_modal": (
                 GptSoVitsModalEngine() if os.environ.get("TTS_MODAL_ENDPOINT_URL") else StubModalEngine()
+            ),
+            # fine-tuned F5-TTS dwarkesh — its OWN Modal container/URL (separate from trump's),
+            # so deploys never cross-affect. Same HTTP contract, so the same engine class works.
+            "tts_dwarkesh": (
+                GptSoVitsModalEngine(base_url=os.environ.get("DWARKESH_TTS_MODAL_ENDPOINT_URL", ""))
+                if os.environ.get("DWARKESH_TTS_MODAL_ENDPOINT_URL") else StubModalEngine()
             ),
         }
     # The React SPA is served from a different origin (voicemix.awill.co) than the

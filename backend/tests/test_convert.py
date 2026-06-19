@@ -71,7 +71,7 @@ def test_unknown_voice_404(client):
 
 
 def test_modal_voice_on_convert_422(client):
-    resp = post_convert(client, voice_id="jfk")
+    resp = post_convert(client, voice_id="trump")
     assert resp.status_code == 422
     assert "impersonate" in resp.json()["error"]
 
