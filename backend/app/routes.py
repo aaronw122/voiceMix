@@ -82,9 +82,9 @@ async def impersonate(
     wav = await _read_and_normalize(audio) if audio is not None else None
     # Map the voice's `modalEngine` tag to a key in app.state.engines. "tts" -> the shared
     # fine-tuned trump endpoint; "tts_dwarkesh" -> the dedicated dwarkesh F5 container;
-    # anything else (or unset) -> RVC, the safe fallback. All live behind /impersonate so
-    # the frontend contract is unchanged.
-    engine_key = {"tts": "tts_modal", "tts_dwarkesh": "tts_dwarkesh"}.get(
+    # "tts_elon" -> the dedicated elon F5 container; anything else (or unset) -> RVC, the safe
+    # fallback. All live behind /impersonate so the frontend contract is unchanged.
+    engine_key = {"tts": "tts_modal", "tts_dwarkesh": "tts_dwarkesh", "tts_elon": "tts_elon"}.get(
         voice.get("modalEngine"), "modal")
     engine = request.app.state.engines[engine_key]
     try:

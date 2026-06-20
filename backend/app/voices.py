@@ -26,11 +26,13 @@ VOICES = [
     },
     # Self-hosted fine-tuned voices on Modal, behind /impersonate. modalEngine selects the
     # container: "tts" -> the Trump F5/GPT-SoVITS endpoint; "tts_dwarkesh" -> the dedicated
-    # Dwarkesh F5 container. Each regenerates the words in the target's FULL delivery (accent +
-    # cadence), audio or text. NOTE: acceptsText stays False until Aaron OKs exposing typed
-    # input in the UI — the engines already support text; this flag only gates the affordance.
+    # Dwarkesh F5 container; "tts_elon" -> the dedicated Elon F5 container. Each regenerates the
+    # words in the target's FULL delivery (accent + cadence), audio or text. NOTE: acceptsText
+    # stays False until Aaron OKs exposing typed input in the UI — the engines already support
+    # text; this flag only gates the affordance.
     {"id": "trump", "name": "Trump", "engine": "modal", "modalEngine": "tts", "acceptsText": False, "elevenVoiceId": None},
     {"id": "dwarkesh", "name": "Dwarkesh", "engine": "modal", "modalEngine": "tts_dwarkesh", "acceptsText": False, "elevenVoiceId": None},
+    {"id": "elon", "name": "Elon", "engine": "modal", "modalEngine": "tts_elon", "acceptsText": False, "elevenVoiceId": None},
 ]
 
 _PUBLIC_FIELDS = ("id", "name", "engine", "acceptsText")
