@@ -7,8 +7,9 @@ as serve_f5_dwarkesh_modal.py, so the backend's GptSoVitsModalEngine works uncha
 just points a per-voice base_url (ELON_TTS_MODAL_ENDPOINT_URL) at this app's *.modal.run URL.
 
 Chosen config (elon run, June 2026 — picked by ear over a checkpoint/speed sweep):
-  elon/model_12000 NON-EMA, ref = elon_jre2404_0653 (clean, energetic),
+  elonv2/model_16000 NON-EMA, ref = elon_jre2404_0653 (clean, energetic),
   nfe_step=32, cfg_strength=2.0, speed default 0.8 (per-request overridable).
+  (v2 = ~133 min / 4 sources; 16k won the ear-A/B over v1@12k and v2@12k/14k/18k/20k.)
 
 Deploy (own app; profile = aaronmodal, where the elon model + tts-vol live):
     MODAL_PROFILE=aaronmodal modal deploy pipeline/serve_f5_elon_modal.py
@@ -27,8 +28,8 @@ F5_DIR = "/opt/F5-TTS"
 VOICE = "elon"
 
 # source artifacts (read-only) we bootstrap the slim serving assets from, once:
-CKPT_SRC = "/vol/ft_f5/ckpts/elon/model_12000.pt"
-VOCAB_SRC = "/vol/ft_f5/data/elon_pinyin/vocab.txt"
+CKPT_SRC = "/vol/ft_f5/ckpts/elonv2/model_16000.pt"
+VOCAB_SRC = "/vol/ft_f5/data/elonv2_pinyin/vocab.txt"
 REF_SRC = "/vol/datasets/elon/clips_v3/elon_jre2404_0653.wav"
 REF_TEXT = ("in a benign scenario universal high income, not just universal basic income, "
             "universal high income, meaning anyone can have any products or services that "
@@ -36,9 +37,9 @@ REF_TEXT = ("in a benign scenario universal high income, not just universal basi
 
 # slim serving assets (built once, then loaded fast on every cold start):
 SERVE_DIR = "/vol/ft_f5/serve"
-NOEMA_CKPT = f"{SERVE_DIR}/elon12k_noema.pt"   # raw (non-EMA) weights, no optimizer state
-SERVE_VOCAB = f"{SERVE_DIR}/elon_vocab.txt"
-SERVE_REF = f"{SERVE_DIR}/elon_ref.wav"
+NOEMA_CKPT = f"{SERVE_DIR}/elonv2_16k_noema.pt"   # raw (non-EMA) weights, no optimizer state (renamed -> rebuilds from v2 ckpt)
+SERVE_VOCAB = f"{SERVE_DIR}/elonv2_vocab.txt"     # v2 vocab is size 68 (v1 was 66) -> must rebuild
+SERVE_REF = f"{SERVE_DIR}/elon_ref.wav"           # ref unchanged (still 0653)
 
 WHISPER_CACHE = "/vol/models/whisper"
 # ASR runs on the USER's input recording (impersonate flow), NOT on Elon content — keep it
@@ -108,7 +109,7 @@ vol = modal.Volume.from_name("tts-vol", create_if_missing=False)
 
 
 def _ensure_serve_assets():
-    """One-time: repackage the non-EMA step-12000 weights into a slim inference checkpoint and
+    """One-time: repackage the non-EMA step-16000 weights into a slim inference checkpoint and
     stage the reference clip + vocab under SERVE_DIR. Idempotent — skips if already built."""
     import shutil
 
@@ -191,7 +192,7 @@ class TTSModel:
 
         @api.get("/health")
         async def health():
-            return {"ok": True, "voice": VOICE, "engine": "f5", "step": 12000}
+            return {"ok": True, "voice": VOICE, "engine": "f5", "step": 16000}
 
         @api.post("/synthesize")
         async def synthesize(request: Request, voice: str = VOICE, text: str | None = None,
