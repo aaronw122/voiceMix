@@ -129,3 +129,28 @@ def test_elevenlabs_voice_on_impersonate_422(client):
 def test_impersonate_unknown_voice_404(client):
     resp = client.post("/impersonate", data={"voiceId": "elvis", "text": "hi"})
     assert resp.status_code == 404
+
+
+def test_warm_routes_to_voices_own_engine(client, app):
+    # /warm must pre-warm the SAME engine /impersonate would use for that voice.
+    tts = FakeEngine()
+    dwarkesh = FakeEngine()
+    app.state.engines["tts_modal"] = tts
+    app.state.engines["tts_dwarkesh"] = dwarkesh
+
+    resp = client.post("/warm", data={"voiceId": "dwarkesh"})
+    assert resp.status_code == 202
+    assert dwarkesh.warm_calls == 1
+    assert tts.warm_calls == 0  # only the target voice's container is warmed
+
+
+def test_warm_elevenlabs_voice_is_noop_202(client):
+    # elevenlabs voices have no cold-start — warm is a 202 no-op, never an error.
+    resp = client.post("/warm", data={"voiceId": "old-man"})
+    assert resp.status_code == 202
+
+
+def test_warm_unknown_voice_202(client):
+    # warming is best-effort: an unknown voice must not 404 / break the recording flow.
+    resp = client.post("/warm", data={"voiceId": "elvis"})
+    assert resp.status_code == 202
