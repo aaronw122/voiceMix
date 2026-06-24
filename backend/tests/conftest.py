@@ -10,10 +10,14 @@ class FakeEngine:
     def __init__(self, output: bytes = FAKE_MP3):
         self.output = output
         self.last_call = None
+        self.warm_calls = 0
 
     async def transform(self, wav, voice_id, text=None):
         self.last_call = {"wav": wav, "voice_id": voice_id, "text": text}
         return self.output
+
+    async def warm(self):
+        self.warm_calls += 1
 
 
 @pytest.fixture

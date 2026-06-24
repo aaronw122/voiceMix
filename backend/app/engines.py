@@ -116,9 +116,31 @@ class GptSoVitsModalEngine:
         self._base = (base_url or os.environ.get("TTS_MODAL_ENDPOINT_URL", "")).rstrip("/")
         self._client = client or httpx.AsyncClient(timeout=120.0)  # cold starts run 20-60s
         self._slots = asyncio.Semaphore(int(os.environ.get("TTS_MODAL_CONCURRENCY", "1")))
+        self._warm_tasks: set[asyncio.Task[None]] = set()  # hold refs so detached pings aren't GC'd
 
     async def aclose(self) -> None:
+        for t in self._warm_tasks:
+            t.cancel()
         await self._client.aclose()
+
+    async def warm(self) -> None:
+        """Fire-and-forget cold-start trigger. Hitting /health forces Modal to boot a container
+        and run @modal.enter() (load weights onto the GPU), so the container is warm by the time
+        the real /synthesize lands. The frontend calls this the moment recording starts, so the
+        ~20-60s boot overlaps the recording instead of stacking on top of it. Best-effort: never
+        blocks the caller and never raises — a failed warm just means the old (cold) latency."""
+        if not self._base:
+            return
+
+        async def _ping() -> None:
+            try:
+                await self._client.get(f"{self._base}/health", timeout=90.0)
+            except Exception as e:  # noqa: BLE001 — warming is best-effort
+                logger.debug("warm ping failed (non-fatal): %r", e)
+
+        task = asyncio.create_task(_ping())
+        self._warm_tasks.add(task)
+        task.add_done_callback(self._warm_tasks.discard)
 
     async def transform(self, wav: bytes | None, voice_id: str, text: str | None) -> bytes:
         async with self._slots:
@@ -146,6 +168,9 @@ class GptSoVitsModalEngine:
 
 class StubModalEngine:
     """Keyless fallback when a modal voice's endpoint URL is unset (passthrough audio)."""
+
+    async def warm(self) -> None:
+        return  # no container to warm
 
     async def transform(self, wav: bytes | None, voice_id: str, text: str | None) -> bytes:
         # voice_id intentionally unused — stub returns passthrough/placeholder audio

@@ -3,7 +3,7 @@ import os
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
@@ -93,6 +93,25 @@ async def impersonate(
         raise HTTPException(502, f"Voice engine failed: {e}")
 
     return _persist(mp3, voice["name"], request)
+
+
+@router.post("/warm")
+async def warm(request: Request, voiceId: str = Form(...)):
+    """Pre-warm a modal voice's GPU container so its cold-start overlaps the user's recording.
+    The frontend calls this the instant recording starts; by the time the take is submitted to
+    /impersonate the container is already booted, cutting ~20-60s off the first request. Always
+    returns 202 — warming is best-effort and must never block or fail the user's flow."""
+    voice = get_voice(voiceId)
+    if voice is None or voice.get("engine") != "modal":
+        return Response(status_code=202)  # unknown voice or elevenlabs — nothing to warm
+    # mirror /impersonate's voice -> engine mapping exactly
+    engine_key = {"tts": "tts_modal", "tts_dwarkesh": "tts_dwarkesh", "tts_elon": "tts_elon"}.get(
+        voice.get("modalEngine"), "modal")
+    engine = request.app.state.engines.get(engine_key)
+    warm_fn = getattr(engine, "warm", None)
+    if warm_fn is not None:
+        await warm_fn()  # schedules a detached ping and returns immediately
+    return Response(status_code=202)
 
 
 @router.post("/convert")

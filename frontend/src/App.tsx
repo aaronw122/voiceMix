@@ -5,7 +5,7 @@ import { RecordPage } from "./components/RecordPage";
 import { ReviewPage } from "./components/ReviewPage";
 import { NavBar, type NavConfig } from "./components/NavBar";
 import { decorate, type Persona } from "./lib/personas";
-import { convert, loadVoices, type ConvertResult } from "./lib/api";
+import { convert, loadVoices, warm, type ConvertResult } from "./lib/api";
 import {
   MAX_SECONDS,
   getSavedMicId,
@@ -95,6 +95,9 @@ export function App() {
 
   // ---- recording ----
   async function onStart() {
+    // Warm the GPU container NOW so its cold-start overlaps the recording (saves ~20-60s on
+    // the first transform). Fire-and-forget — must not delay or block starting the mic.
+    if (persona) warm(persona);
     setSeconds(0);
     capturedRef.current = [];
     setLive(false);
