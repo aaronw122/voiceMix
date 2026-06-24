@@ -11,8 +11,9 @@ Chosen config (elon run, June 2026 — picked by ear over a checkpoint/speed swe
   nfe_step=32, cfg_strength=2.0, speed default 0.8 (per-request overridable).
   (v2 = ~133 min / 4 sources; 16k won the ear-A/B over v1@12k and v2@12k/14k/18k/20k.)
 
-Deploy (own app; profile = aaronmodal, where the elon model + tts-vol live):
-    MODAL_PROFILE=aaronmodal modal deploy pipeline/serve_f5_elon_modal.py
+Deploy (own app; profile = aaronw122, alongside the trump + dwarkesh F5 apps; the elon
+slim serving assets live on that workspace's tts-vol under ft_f5/serve/):
+    ELON_APP_NAME=voicemix-el MODAL_PROFILE=aaronw122 modal deploy pipeline/serve_f5_elon_modal.py
 Then set the backend env ELON_TTS_MODAL_ENDPOINT_URL to this app's *.modal.run URL.
 """
 import difflib
